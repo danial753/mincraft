@@ -1,0 +1,29 @@
+{
+  "name": "parsbot",
+  "version": "4.3.0",
+  "description": "پارس‌بات — ربات چندمنظوره ماینکرفت بر پایه نسخه شخصی‌سازی‌شده mineflayer",
+  "main": "src/index.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "local": "node src/index.js --profile local",
+    "offline": "node src/index.js --profile offline",
+    "microsoft": "node src/index.js --profile microsoft"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "mineflayer": "file:../mineflayer",
+    "mineflayer-pathfinder": "^2.4.5",
+    "mineflayer-pvp": "^1.3.2",
+    "mineflayer-collectblock": "^1.4.1",
+    "mineflayer-tool": "^1.2.0",
+    "mineflayer-armor-manager": "^2.0.1",
+    "minecraft-data": "^3.114.0",
+    "vec3": "^0.1.10",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

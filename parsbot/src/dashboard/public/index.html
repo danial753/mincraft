@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>پارس‌بات — داشبورد</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b27; --panel2: #1c2333; --border: #2a3348;
+    --text: #e6edf3; --muted: #8b98b3; --green: #3fb950; --red: #f85149;
+    --yellow: #d29922; --blue: #58a6ff; --accent: #7c5cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', Tahoma, 'Vazirmatn', sans-serif;
+    min-height: 100vh; padding: 16px;
+    background-image: radial-gradient(circle at 20% 0%, rgba(124,92,255,.08), transparent 40%),
+                      radial-gradient(circle at 80% 100%, rgba(63,185,80,.06), transparent 40%);
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo .cube {
+    width: 40px; height: 40px; border-radius: 8px;
+    background: linear-gradient(135deg, #3fb950 0%, #2ea043 50%, #1a7f37 100%);
+    display: grid; place-items: center; font-size: 22px;
+    box-shadow: 0 0 20px rgba(63,185,80,.3);
+  }
+  h1 { font-size: 22px; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge {
+    padding: 6px 14px; border-radius: 20px; font-size: 13px;
+    border: 1px solid var(--border); background: var(--panel);
+  }
+  .badge.online { color: var(--green); border-color: var(--green); }
+  .badge.connecting { color: var(--yellow); border-color: var(--yellow); }
+  .badge.offline { color: var(--red); border-color: var(--red); }
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin-bottom: 12px; color: var(--blue); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  input, select {
+    width: 100%; padding: 9px 12px; border-radius: 8px;
+    background: var(--panel2); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button {
+    padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 13px; font-family: inherit; font-weight: 600;
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    transition: all .15s;
+  }
+  button:hover { border-color: var(--accent); transform: translateY(-1px); }
+  button.primary { background: linear-gradient(135deg, #2ea043, #1a7f37); border: none; color: #fff; }
+  button.danger { background: linear-gradient(135deg, #da3633, #b62324); border: none; color: #fff; }
+  button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-row button { flex: 1; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat {
+    background: var(--panel2); border-radius: 10px; padding: 12px;
+    border: 1px solid var(--border);
+  }
+  .stat .k { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .stat .v { font-size: 16px; font-weight: 700; direction: ltr; text-align: right; }
+  .bar { height: 8px; background: #21262d; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 4px; transition: width .5s; }
+  .bar .hp { background: linear-gradient(90deg, #f85149, #ff7b72); }
+  .bar .fd { background: linear-gradient(90deg, #d29922, #e3b341); }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .quick button { padding: 7px 12px; font-size: 12px; }
+  .console {
+    background: #0a0e14; border-radius: 10px; padding: 12px;
+    height: 300px; overflow-y: auto; font-size: 12.5px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    border: 1px solid var(--border); line-height: 1.7;
+  }
+  .console .line { white-space: pre-wrap; word-break: break-word; }
+  .console .t { color: #566181; margin-left: 6px; font-size: 11px; }
+  .lv-info { color: #9ecbff; } .lv-error { color: #ff7b72; }
+  .lv-warn { color: #e3b341; } .lv-chat { color: #7ee787; }
+  .lv-combat { color: #ffa198; } .lv-survival { color: #d2a8ff; }
+  .lv-msa { color: #ffd33d; font-weight: bold; }
+  .chat-row { display: flex; gap: 8px; margin-top: 10px; }
+  .chat-row input { flex: 1; }
+  .msa-banner {
+    display: none; background: linear-gradient(135deg, #4d2d00, #3a2300);
+    border: 1px solid var(--yellow); border-radius: 12px;
+    padding: 14px 18px; margin-bottom: 16px; font-size: 14px;
+  }
+  .msa-banner code {
+    background: #000; padding: 3px 10px; border-radius: 6px;
+    font-size: 18px; letter-spacing: 2px; color: var(--yellow);
+  }
+  .msa-banner a { color: var(--blue); }
+  .players { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .player-chip {
+    background: var(--panel2); padding: 4px 10px; border-radius: 12px;
+    font-size: 12px; border: 1px solid var(--border); cursor: pointer;
+  }
+  .player-chip:hover { border-color: var(--accent); }
+  .cmd-help { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.8; }
+  footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: 8px; }
+
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .tab { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .tab.sel { border-color: var(--accent); background: var(--panel2); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+  .dot.online { background: var(--green); } .dot.connecting { background: var(--yellow); }
+  .tab small { color: var(--muted); font-size: 11px; }
+  .progress { height: 14px; background: #21262d; border-radius: 7px; overflow: hidden; margin: 10px 0 6px; }
+  .progress > div { height: 100%; background: linear-gradient(90deg, #7c5cff, #3fb950); transition: width .6s; width: 0; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.7; }
+
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo"><div class="cube">🏰</div><div><h1 id="brand">پارس‌بات</h1><div class="sub">چند ربات + ساخت‌وساز مشترک (قلعه، برج، دیوار، هرم)</div></div></div>
+    <div class="badges"><span class="badge" id="buildBadge">ساخت: —</span><span class="badge" id="countBadge">۰ ربات</span><button id="toggleSetup">⚙ اتصال به سرور</button></div>
+  </header>
+
+  <div class="msa-banner" id="msaBanner">🔑 <b>ورود مایکروسافت:</b> به <a id="msaLink" href="#" target="_blank">microsoft.com/link</a> برو و کد <code id="msaCode">—</code> را وارد کن.</div>
+
+  <div class="card" id="setupCard">
+    <h2>🔌 اتصال به سرور ماینکرفت</h2>
+    <div class="row"><div><label>آدرس سرور</label><input id="suHost" dir="ltr" placeholder="Danial753.aternos.me:38644"></div><div><label>پورت (اگر در آدرس ننوشتی)</label><input id="suPort" dir="ltr" placeholder="25565"></div></div>
+    <div class="row"><div><label>اسم تو در ماینکرفت (صاحب ربات‌ها)</label><input id="suOwner" dir="ltr" placeholder="dsllo"></div><div><label>تعداد ربات</label><input id="suBots" value="2" dir="ltr"></div></div>
+    <div class="row"><div><label>اسم پایه‌ی ربات‌ها</label><input id="suName" value="Bot" dir="ltr"></div><div><label>نسخه‌ی ماینکرفت (خالی = خودکار)</label><input id="suVer" dir="ltr" placeholder="26.1"></div></div>
+    <div class="btn-row"><button class="primary" id="suGo">اتصال ▶</button></div>
+    <div class="hint" id="suMsg">قبل از اتصال: سرور (مثلاً Aternos) روشن و Online باشد، حالت Cracked روشن باشد، و Whitelist شامل اسم تو و ربات‌ها (Bot، Bot2، ...) باشد. بعد برای هر ربات در کنسول سرور <code>op Bot</code> بزن.</div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>➕ افزودن ربات</h2>
+        <label>پروفایل</label>
+        <select id="profile"><option value="local">🏠 سرور محلی</option><option value="offline">🌐 آفلاین</option><option value="microsoft">🟩 مایکروسافت</option><option value="custom">⚙ سفارشی</option></select>
+        <label>آدرس سرور</label><input id="host" dir="ltr" placeholder="localhost">
+        <div class="row"><div><label>پورت</label><input id="port" value="25565" dir="ltr"></div><div><label>نسخه</label><input id="version" placeholder="auto" dir="ltr"></div></div>
+        <div class="row"><div><label>نام ربات</label><input id="username" dir="ltr" placeholder="Builder"></div><div><label>تعداد</label><input id="count" value="1" dir="ltr"></div></div>
+        <label>احراز هویت</label><select id="auth"><option value="offline">آفلاین (کرک‌شده)</option><option value="microsoft">مایکروسافت</option></select>
+        <div class="btn-row"><button class="primary" id="addBtn">افزودن ▶</button></div>
+      </div>
+      <div class="card">
+        <h2 id="selTitle">🤖 ربات انتخاب‌شده</h2>
+        <label>نقش این ربات</label>
+        <select id="roleSel"><option value="builder">🏗 سازنده (creative)</option><option value="survivor">⛏ بقا (survival + اکتشاف)</option><option value="idle">💤 بیکار</option></select>
+        <div class="hint">سازنده: در ساخت گروهی شرکت می‌کند. بقا: به او می‌گویی چه بیاورد/پیدا کند. برای عوض شدن حالت بازی ربات باید OP باشد.</div>
+        <div class="btn-row"><button id="reconBtn">اتصال مجدد</button><button class="danger" id="rmBtn">حذف</button></div>
+        <div class="players" id="players"><span class="sub">—</span></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>🏗 ساخت‌وساز گروهی</h2>
+        <div class="row"><div><label>نقشه</label><select id="bpType"></select></div><div><label>سبک (فقط قلعه)</label><select id="bpStyle"><option value="">خودکار (تصادفی)</option><option>royal</option><option>gothic</option><option>azure</option><option>sun</option><option>forest</option></select></div></div>
+        <div class="row"><div><label>اندازه</label><input id="bpSize" dir="ltr" placeholder="57"></div><div><label>seed (برای تکرار همان قلعه)</label><input id="bpSeed" dir="ltr" placeholder="خودکار"></div></div>
+        <label>پارامترهای بیشتر (مثال: wallh=11 ring=6)</label><input id="bpParams" dir="ltr" placeholder="wallh=11">
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="bpGather" style="width:auto"> مصالح را ربات‌ها خودشان جمع کنند (کندن/ساختن/ذوب؛ بسیار کندتر ولی واقعی)</label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="bpFlat" checked style="width:auto"> هموار کردن زمین قبل از ساخت (برداشتن درخت/تپه، پر کردن گودال)</label>
+        <div class="row"><div><label>X گوشه‌ی ساخت</label><input id="atX" dir="ltr" placeholder="خودکار (کنار ربات)"></div><div><label>Z گوشه‌ی ساخت</label><input id="atZ" dir="ltr" placeholder="خودکار"></div></div>
+        <div class="btn-row"><button id="dryBtn">👁 پیش‌نمایش</button><button class="primary" id="buildBtn">🚀 شروع ساخت</button><button class="danger" id="buildStop">🛑 توقف</button></div>
+        <div class="progress"><div id="bar"></div></div>
+        <div class="hint" id="buildInfo">بدون ساخت فعال.</div>
+        <div class="hint">برای سرعت و مصالح نامحدود ربات‌ها باید creative باشند: در کنسول سرور <code>op نام_ربات</code> و بعد دستور <code>creative</code> (یا <code>/gamemode creative</code>). ربات‌ها در همه‌ی لایه‌ها هم‌زمان کار می‌کنند.</div>
+      </div>
+
+      <div class="card">
+        <h2>📊 وضعیت</h2>
+        <div class="stats">
+          <div class="stat"><div class="k">❤ جان</div><div class="v" id="hp">—</div><div class="bar"><div class="hp" id="hpBar" style="width:0%"></div></div></div>
+          <div class="stat"><div class="k">🍗 غذا</div><div class="v" id="fd">—</div><div class="bar"><div class="fd" id="fdBar" style="width:0%"></div></div></div>
+          <div class="stat"><div class="k">📍 موقعیت</div><div class="v" id="pos" style="font-size:13px">—</div></div>
+          <div class="stat"><div class="k">🎮 حالت بازی</div><div class="v" id="gm">—</div></div>
+          <div class="stat"><div class="k">⚙ کار</div><div class="v" id="mode" style="font-size:13px">—</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>⛏ حالت بقا و اکتشاف</h2>
+        <div class="row"><div><label>چه چیزی؟ (فارسی یا انگلیسی: الماس، آهن، diamond_ore، village، روستا ...)</label><input id="goalName" placeholder="الماس"></div><div><label>تعداد</label><input id="goalCount" value="1" dir="ltr"></div></div>
+        <div class="btn-row"><button class="primary" id="goalGet">🎒 برو بیاور</button><button id="goalFind">🔭 پیدا کن (مختصات بده)</button><button id="goalExplore">🧭 اکتشاف</button><button class="danger" id="goalCancel">لغو هدف‌ها</button></div>
+        <div class="hint" id="goalInfo">—</div>
+      </div>
+
+      <div class="card">
+        <h2>⌨ کنسول (همان دستورات ترمینال)</h2>
+        <div class="chat-row"><input id="consoleInput" dir="ltr" placeholder="role Bot2 survivor  |  Bot2 get diamond 3  |  build castle seed=7 style=azure  |  help"><button id="consoleSend">اجرا</button></div>
+      </div>
+
+      <div class="card">
+        <h2>⚡ دستورات</h2>
+        <div class="quick" id="quickBtns"></div>
+        <div class="chat-row"><input id="cmdInput" placeholder="مثال: build castle size=35 | follow Steve | creative" dir="ltr"><button id="cmdSend">اجرا</button></div>
+      </div>
+
+      <div class="card">
+        <h2>💬 لاگ زنده</h2>
+        <div class="console" id="console"></div>
+        <div class="chat-row"><input id="chatInput" placeholder="پیامی که ربات انتخاب‌شده بگوید..."><button class="primary" id="chatSend">ارسال 💬</button></div>
+      </div>
+    </div>
+  </div>
+  <footer>ParsBot v2 — بر پایه Mineflayer (MIT)</footer>
+</div>
+<script>
+const $ = id => document.getElementById(id)
+const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+// توکن از آدرس (#token=...) خوانده و در sessionStorage نگه‌داری می‌شود
+const m = /token=([a-f0-9]+)/.exec(location.hash)
+if (m) { sessionStorage.setItem('tok', m[1]); history.replaceState(null, '', location.pathname) }
+let TOKEN = sessionStorage.getItem('tok') || prompt('توکن داشبورد (در ترمینال چاپ شده):') || ''
+if (TOKEN) sessionStorage.setItem('tok', TOKEN)
+
+let profiles = {}; let selected = null; let lastStatus = { bots: [] }
+const roleIcon = { builder: '🏗', survivor: '⛏', idle: '💤' }
+const modeNames = { survive: 'بقا ⛏', idle: 'بیکار', follow: 'دنبال', goto: 'در مسیر', come: 'آمدن', attack: 'حمله', hunt: 'شکار', mine: 'معدن', farm: 'کشاورزی', fish: 'ماهی', collect: 'جمع‌آوری', build: 'ساخت 🏗' }
+
+async function api (path, method, body) {
+  const r = await fetch(path, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', 'x-token': TOKEN }, body: body ? JSON.stringify(body) : undefined })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.error || 'خطا')
+  return j
+}
+const fail = e => alert(e.message)
+
+function addLog (e) {
+  if (selected && e.botId !== selected && e.level !== 'msa') return
+  const c = $('console'); const div = document.createElement('div')
+  div.className = 'line lv-' + (e.level || 'info')
+  div.innerHTML = '<span class="t">' + new Date(e.t).toLocaleTimeString('fa-IR') + '</span>' + (selected ? '' : '<b>[' + esc(e.botId) + ']</b> ') + esc(e.message)
+  c.appendChild(div)
+  while (c.children.length > 400) c.removeChild(c.firstChild)
+  c.scrollTop = c.scrollHeight
+}
+async function reloadLogs () {
+  $('console').innerHTML = ''
+  try { (selected ? (await api('/api/bots/' + selected + '/logs')).logs : await api('/api/logs')).forEach(addLog) } catch {}
+}
+
+function render (st) {
+  lastStatus = st
+  $('brand').textContent = st.brand || 'پارس‌بات'
+  $('countBadge').textContent = st.bots.length + ' ربات'
+  if (!setupShownOnce) { setupShownOnce = true; $('setupCard').style.display = st.bots.length ? 'none' : '' }
+  if (!selected || !st.bots.find(b => b.id === selected)) { selected = st.bots[0] ? st.bots[0].id : null; reloadLogs() }
+  const tabs = $('tabs'); tabs.innerHTML = ''
+  for (const b of st.bots) {
+    const t = document.createElement('div'); t.className = 'tab' + (b.id === selected ? ' sel' : '')
+    t.innerHTML = '<span class="dot ' + b.connection + '"></span><b>' + (roleIcon[b.role] || '') + ' ' + esc(b.id) + (b.id === st.leader ? ' ★' : '') + '</b><small>' + esc(modeNames[b.mode.name] || b.mode.name) + '</small>'
+    t.onclick = () => { selected = b.id; reloadLogs(); render(lastStatus) }
+    tabs.appendChild(t)
+  }
+  const b = st.bots.find(x => x.id === selected)
+  $('selTitle').textContent = b ? '🤖 ' + b.id : '🤖 ربات انتخاب‌شده'
+  $('hp').textContent = b && b.health != null ? Math.round(b.health) + ' / 20' : '—'
+  $('fd').textContent = b && b.food != null ? b.food + ' / 20' : '—'
+  $('hpBar').style.width = b && b.health != null ? (b.health / 20 * 100) + '%' : '0%'
+  $('fdBar').style.width = b && b.food != null ? (b.food / 20 * 100) + '%' : '0%'
+  $('pos').textContent = b && b.position ? b.position.x + ', ' + b.position.y + ', ' + b.position.z : '—'
+  $('gm').textContent = b && b.gameMode ? b.gameMode : '—'
+  if (b && document.activeElement !== $('roleSel')) $('roleSel').value = b.role
+  $('goalInfo').textContent = b && b.goals ? (b.goals.current ? 'هدف فعلی: ' + b.goals.current : 'هدفی ندارد') + ' | صف: ' + b.goals.queued : '—'
+  $('mode').textContent = b ? (modeNames[b.mode.name] || b.mode.name) + (b.mode.detail ? ' (' + b.mode.detail + ')' : '') : '—'
+  const pl = $('players'); pl.innerHTML = ''
+  for (const name of (b ? b.players : [])) { const c = document.createElement('span'); c.className = 'player-chip'; c.textContent = name; c.onclick = () => { $('cmdInput').value = 'follow ' + name; $('cmdInput').focus() }; pl.appendChild(c) }
+  const bb = st.bots.find(x => x.msaCode); if (bb) showMsa(bb.msaCode)
+  const j = st.build
+  if (j) {
+    $('bar').style.width = j.percent + '%'
+    $('buildBadge').textContent = 'ساخت: ' + j.name + ' ' + j.percent + '%' + (j.finished ? ' ✅' : '')
+    $('buildInfo').textContent = 'مرحله ' + j.stageIndex + '/' + j.stages + ': ' + (j.stage || '') + ' | ' + j.done + '/' + j.total + ' بلاک | لایه ' + (j.layer ?? '—') + ' | ناموفق ' + j.failed + ' | ' + j.seconds + ' ثانیه' + (j.cancelled ? ' | متوقف شد' : '') + (j.topFailures.length ? ' | علت: ' + j.topFailures.map(x => x[0] + '(' + x[1] + ')').join('، ') : '')
+  } else { $('bar').style.width = '0'; $('buildBadge').textContent = 'ساخت: —' }
+}
+function showMsa (c) { $('msaBanner').style.display = 'block'; $('msaCode').textContent = c.user_code; $('msaLink').href = c.verification_uri; $('msaLink').textContent = c.verification_uri }
+
+api('/api/profiles').then(p => { profiles = p; loadProfile() }).catch(fail)
+function loadProfile () { const p = profiles[$('profile').value]; if (!p) return; $('host').value = p.host || ''; $('port').value = p.port || 25565; $('auth').value = p.auth || 'offline'; $('version').value = p.version || '' }
+$('profile').onchange = loadProfile
+
+$('addBtn').onclick = async () => {
+  const n = Math.max(1, Math.min(8, parseInt($('count').value) || 1)); const base = $('username').value.trim()
+  try {
+    for (let i = 0; i < n; i++) {
+      await api('/api/bots', 'POST', { profile: $('profile').value, host: $('host').value, port: $('port').value, auth: $('auth').value, version: $('version').value, username: base ? (n > 1 ? base + (i + 1) : base) : '' })
+      if (i < n - 1) await new Promise(r => setTimeout(r, 4500))
+    }
+  } catch (e) { fail(e) }
+}
+$('rmBtn').onclick = () => { if (selected && confirm('حذف ' + selected + '؟')) api('/api/bots/' + selected, 'DELETE').catch(fail) }
+$('reconBtn').onclick = () => selected && api('/api/bots/' + selected + '/reconnect', 'POST', {}).catch(fail)
+
+async function sendCmd (raw) {
+  raw = raw.trim().replace(/^!/, ''); if (!raw || !selected) return
+  const [name, ...args] = raw.split(/\s+/)
+  try { await api('/api/bots/' + selected + '/command', 'POST', { name, args }) } catch (e) { fail(e) }
+}
+$('cmdSend').onclick = () => { sendCmd($('cmdInput').value); $('cmdInput').value = '' }
+$('cmdInput').onkeydown = e => { if (e.key === 'Enter') $('cmdSend').onclick() }
+$('chatSend').onclick = async () => { const msg = $('chatInput').value.trim(); if (!msg || !selected) return; try { await api('/api/bots/' + selected + '/chat', 'POST', { message: msg }); $('chatInput').value = '' } catch (e) { fail(e) } }
+$('chatInput').onkeydown = e => { if (e.key === 'Enter') $('chatSend').onclick() }
+
+for (const [cmd, label] of [['help', '📖 راهنما'], ['pos', '📍 موقعیت'], ['creative', '🎨 creative'], ['buildinfo', '🏗 پیشرفت'], ['stop', '✋ توقف'], ['come', '🏃 بیا'], ['hunt on', '🏹 شکار'], ['hunt off', 'شکار خاموش'], ['farm', '🌾 کشاورزی'], ['eat', '🍗 بخور'], ['armor', '🛡 زره']]) {
+  const b = document.createElement('button'); b.textContent = label; b.onclick = () => sendCmd(cmd); $('quickBtns').appendChild(b)
+}
+
+function parseParams (s) { const o = {}; for (const p of s.trim().split(/\s+/)) { const m = /^(\w+)=(.*)$/.exec(p); if (m) o[m[1]] = m[2] } return o }
+function buildReq (dry) {
+  const at = ['atX', 'atZ'].map(i => parseFloat($(i).value))
+  const params = parseParams($('bpParams').value)
+  if ($('bpStyle').value) params.style = $('bpStyle').value
+  if ($('bpSeed').value.trim()) params.seed = $('bpSeed').value.trim()
+  if ($('bpSize').value.trim()) params.size = $('bpSize').value.trim()
+  if ($('bpGather').checked) params.gather = '1'
+  return { type: $('bpType').value, params, dry, flatten: $('bpFlat').checked, at: at.every(Number.isFinite) ? { x: at[0], z: at[1] } : undefined }
+}
+$('dryBtn').onclick = async () => { try { const r = await api('/api/build', 'POST', buildReq(true)); const s = r.summary; $('buildInfo').textContent = 'پیش‌نمایش: ' + (s.style ? 'سبک ' + s.style + ' seed ' + s.seed + ' | ' : '') + s.blocks + ' بلاک، ابعاد ' + s.size.x + '×' + s.size.y + '×' + s.size.z + ' | ' + Object.entries(s.counts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(x => x[0] + '×' + x[1]).join(' ') } catch (e) { fail(e) } }
+$('buildBtn').onclick = async () => { try { await api('/api/build', 'POST', buildReq(false)) } catch (e) { fail(e) } }
+$('buildStop').onclick = () => api('/api/build/stop', 'POST', {}).catch(fail)
+api('/api/blueprints').then(b => { for (const [k, v] of Object.entries(b)) { const o = document.createElement('option'); o.value = k; o.textContent = k + ' — ' + v.desc; $('bpType').appendChild(o) } }).catch(() => {})
+
+
+$('roleSel').onchange = () => selected && api('/api/bots/' + selected + '/role', 'POST', { role: $('roleSel').value }).catch(fail)
+const goalCmd = (c) => { const n = $('goalName').value.trim(); if (!n) return alert('اسم چیز را بنویس'); sendCmd(c + ' ' + n.replace(/\s+/g, '_') + ' ' + ($('goalCount').value || 1)) }
+$('goalGet').onclick = () => goalCmd('get')
+$('goalFind').onclick = () => goalCmd('find')
+$('goalExplore').onclick = () => sendCmd('explore ' + ($('goalCount').value || 5))
+$('goalCancel').onclick = () => sendCmd('cancelgoals')
+async function runConsole () {
+  const line = $('consoleInput').value.trim(); if (!line) return
+  $('consoleInput').value = ''
+  addLog({ t: Date.now(), level: 'chat', message: '› ' + line, botId: selected })
+  try { const r = await api('/api/console', 'POST', { line }); for (const l of r.lines) addLog({ t: Date.now(), level: 'info', message: l, botId: selected }) } catch (e) { addLog({ t: Date.now(), level: 'error', message: e.message, botId: selected }) }
+}
+$('consoleSend').onclick = runConsole
+$('consoleInput').onkeydown = e => { if (e.key === 'Enter') runConsole() }
+
+
+let setupShownOnce = false
+api('/api/setup').then(r => { const l = r.last || {}; if (l.host) $('suHost').value = l.host + (l.port && l.port != 25565 ? ':' + l.port : ''); $('suOwner').value = l.owner || r.owner || ''; if (l.bots) $('suBots').value = l.bots; if (l.username) $('suName').value = l.username; if (l.version) $('suVer').value = l.version }).catch(() => {})
+$('toggleSetup').onclick = () => { $('setupCard').style.display = $('setupCard').style.display === 'none' ? '' : 'none' }
+$('suGo').onclick = async () => {
+  $('suMsg').textContent = 'در حال اتصال...'
+  try { const r = await api('/api/setup', 'POST', { host: $('suHost').value, port: $('suPort').value, owner: $('suOwner').value, bots: $('suBots').value, username: $('suName').value, version: $('suVer').value }); $('suMsg').textContent = '✅ ' + r.message + ' — پیشرفت را در «لاگ زنده» پایین ببین.'; $('setupCard').style.display = 'none' } catch (e) { $('suMsg').textContent = '❌ ' + e.message }
+}
+
+api('/api/status').then(render).catch(fail)
+function connectWS () {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?token=' + encodeURIComponent(TOKEN))
+  ws.onmessage = ev => { const { type, data } = JSON.parse(ev.data); if (type === 'log') addLog(data); else if (type === 'status') render(data); else if (type === 'msa') showMsa(data) }
+  ws.onclose = () => setTimeout(connectWS, 2000)
+}
+connectWS()
+</script>
+</body>
+</html>

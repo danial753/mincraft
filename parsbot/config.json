@@ -1,0 +1,50 @@
+{
+  "brand": "ParsBot",
+  "owner": "",
+  "prefix": "!",
+  "greet": "سلام! من پارس‌بات هستم 🤖 برای دیدن دستورات بنویسید !help",
+  "dashboard": {
+    "host": "127.0.0.1",
+    "port": 3000,
+    "token": ""
+  },
+  "reconnect": {
+    "enabled": true,
+    "delayMs": 10000,
+    "maxRetries": 12
+  },
+  "autoConnectProfile": null,
+  "features": {
+    "chat": true,
+    "movement": true,
+    "combat": true,
+    "farming": true,
+    "survival": true,
+    "builder": true
+  },
+  "profiles": {
+    "local": {
+      "host": "localhost",
+      "port": 25565,
+      "username": "ParsBot",
+      "auth": "offline",
+      "version": false
+    },
+    "offline": {
+      "host": "play.example.com",
+      "port": 25565,
+      "username": "ParsBot",
+      "auth": "offline",
+      "version": false
+    },
+    "microsoft": {
+      "host": "play.example.net",
+      "port": 25565,
+      "username": "you@example.com",
+      "auth": "microsoft",
+      "version": false
+    }
+  },
+  "ownerPassword": "",
+  "maxBots": 8
+}
