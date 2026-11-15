@@ -127,7 +127,15 @@ module.exports = function chat (bot, ctx) {
   // ---- پردازش چت ----
   bot.on('chat', async (username, message) => {
     if (username === bot.username) return
+    if (fleet && fleet.bots.has(username)) return // پیام ربات‌های خودمان را دستور حساب نکن
     if (isLeader()) ctx.log('chat', `${username}: ${message}`)
+    // «\\دستور» هم مثل «!دستور» پذیرفته می‌شود؛ و صاحب ربات می‌تواند بدون پیشوند هم دستور بنویسد (مثلاً: all doctor)
+    if (message.startsWith('\\')) message = prefix + message.slice(1)
+    else if (!message.startsWith(prefix) && ctx.commands.isOwner(username)) {
+      const w = (message.trim().split(/\s+/)[0] || '').toLowerCase()
+      const names = fleet ? [...fleet.bots.keys()].map(k => k.toLowerCase()) : [bot.username.toLowerCase()]
+      if (w === 'all' || w === 'همه' || names.includes(w) || ctx.commands.get(w)) message = prefix + message
+    }
     if (!message.startsWith(prefix)) return
     const parts = message.slice(prefix.length).trim().split(/\s+/)
     let cmd; let args

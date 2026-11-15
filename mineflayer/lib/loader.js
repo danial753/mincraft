@@ -50,7 +50,10 @@ const plugins = {
 const minecraftData = require('minecraft-data')
 const { testedVersions, latestSupportedVersion, oldestSupportedVersion } = require('./version')
 const latestSupportedProtocolVersion = minecraftData.versionsByMinecraftVersion.pc[latestSupportedVersion].version
-if (!latestSupportedProtocolVersion) throw new Error(`Version '${latestSupportedVersion}' not supported by minecraft-data - is it up to date?`)
+
+if (!latestSupportedProtocolVersion) {
+  throw new Error(`Version '${latestSupportedVersion}' not supported by minecraft-data - is it up to date?`)
+}
 
 module.exports = {
   createBot,
@@ -75,6 +78,12 @@ function createBot (options = {}) {
   options.client = options.client ?? null
   options.brand = options.brand ?? 'vanilla'
   options.respawn = options.respawn ?? true
+
+  // اگر کاربر نسخه را دستی مشخص کرده باشد، از همان برای registry استفاده می‌کنیم
+  const forcedVersion = options.version && options.version !== false
+    ? options.version
+    : null
+
   const bot = new EventEmitter()
   bot._client = options.client
   bot.end = (reason) => bot._client.end(reason)
@@ -82,6 +91,7 @@ function createBot (options = {}) {
     if (options.hideErrors) return
     console.warn('[mineflayer]', ...message)
   }
+
   if (options.logErrors) {
     bot.on('error', err => {
       if (!options.hideErrors) {
@@ -91,41 +101,80 @@ function createBot (options = {}) {
   }
 
   pluginLoader(bot, options)
+
   const internalPlugins = Object.keys(plugins)
     .filter(key => {
       if (typeof options.plugins[key] === 'function') return false
       if (options.plugins[key] === false) return false
       return options.plugins[key] || options.loadInternalPlugins
     }).map(key => plugins[key])
+
   const externalPlugins = Object.keys(options.plugins)
     .filter(key => {
       return typeof options.plugins[key] === 'function'
     }).map(key => options.plugins[key])
+
   bot.loadPlugins([...internalPlugins, ...externalPlugins])
 
   options.validateChannelProtocol = false
   bot._client = bot._client ?? mc.createClient(options)
+
   bot._client.on('connect', () => {
     bot.emit('connect')
   })
+
   bot._client.on('error', (err) => {
     bot.emit('error', err)
   })
+
   bot._client.on('end', (reason) => {
     bot.emit('end', reason)
   })
+
   if (!bot._client.wait_connect) next()
   else bot._client.once('connect_allowed', next)
+
   function next () {
     const serverPingVersion = bot._client.version
-    bot.registry = require('prismarine-registry')(serverPingVersion)
-    if (!bot.registry?.version) throw new Error(`Server version '${serverPingVersion}' is not supported, no data for version`)
+
+    // اگر options.version داده شده باشد، registry بر اساس همان ساخته می‌شود.
+    // در غیر این صورت از نسخه‌ای که سرور اعلام کرده استفاده می‌شود.
+    const registryVersion = forcedVersion || serverPingVersion
+
+    let registry = null
+    try {
+      registry = require('prismarine-registry')(registryVersion)
+    } catch (err) {
+      registry = null
+    }
+
+    if (!registry?.version) {
+      const supported = Array.isArray(testedVersions) && testedVersions.length
+        ? testedVersions.join(', ')
+        : 'unknown'
+
+      throw new Error(
+        `Server version '${serverPingVersion}' is not supported by mineflayer/minecraft-data. ` +
+        `No data available for version '${registryVersion}'. ` +
+        `Set options.version to a supported version (tested: ${supported}) ` +
+        `or change the server version to a supported one.`
+      )
+    }
+
+    bot.registry = registry
 
     const versionData = bot.registry.version
+
     if (versionData['>'](latestSupportedVersion) && (versionData.version !== latestSupportedProtocolVersion)) {
-      throw new Error(`Server version '${serverPingVersion}' is not supported. Latest supported version is '${latestSupportedVersion}'.`)
+      throw new Error(
+        `Server version '${serverPingVersion}' is not supported. ` +
+        `Latest supported version is '${latestSupportedVersion}'.`
+      )
     } else if (versionData['<'](oldestSupportedVersion)) {
-      throw new Error(`Server version '${serverPingVersion}' is not supported. Oldest supported version is '${oldestSupportedVersion}'.`)
+      throw new Error(
+        `Server version '${serverPingVersion}' is not supported. ` +
+        `Oldest supported version is '${oldestSupportedVersion}'.`
+      )
     }
 
     bot.protocolVersion = versionData.version
@@ -133,7 +182,9 @@ function createBot (options = {}) {
     bot.version = versionData.minecraftVersion
     options.version = versionData.minecraftVersion
     bot.supportFeature = bot.registry.supportFeature
+
     setTimeout(() => bot.emit('inject_allowed'), 0)
   }
+
   return bot
 }

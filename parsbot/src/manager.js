@@ -82,6 +82,7 @@ class BotManager extends EventEmitter {
     const base = {
       id: this.id,
       role: this.role,
+      worker: this.bot && this.bot.builder ? { state: this.bot.builder.state || 'idle', restarts: this.bot.builder.restarts || 0 } : null,
       goals: this.bot && this.bot.brain ? { current: this.bot.brain.current ? this.bot.brain.current.type + ' ' + (this.bot.brain.current.name || '') : null, queued: this.bot.brain.goals.length } : null,
       brand: this.config.brand,
       connection: this.connection,
@@ -116,7 +117,8 @@ class BotManager extends EventEmitter {
     for (const [k, v] of Object.entries(overrides)) {
       if (v !== undefined && v !== null && v !== '') clean[k] = v
     }
-    const opts = { logErrors: false, hideErrors: true, ...profile, ...clean }
+    // viewDistance کوتاه: چانک کمتر = CPU و شبکه‌ی کمتر (برای چند ربات روی سرورهای ضعیف مثل Aternos ضروری است)
+    const opts = { logErrors: false, hideErrors: true, viewDistance: this.config.viewDistance || 'short', checkTimeoutInterval: 120000, ...profile, ...clean }
     if (!opts.host) throw new Error('آدرس سرور مشخص نیست (host)')
     opts.username = opts.username || this.config.brand
     opts.auth = opts.auth || 'offline'
@@ -169,6 +171,13 @@ class BotManager extends EventEmitter {
         this.log('error', `پلاگین ${key} بارگذاری نشد: ${e.message}`)
       }
     }
+
+    // ضد «idle kick» (سرور بازیکن بی‌حرکت را بعد از ۳۰ دقیقه بیرون می‌اندازد)
+    const idleTimer = setInterval(() => {
+      if (this.bot !== bot || !bot.entity) return
+      try { bot.look(bot.entity.yaw + (Math.random() - 0.5) * 0.6, bot.entity.pitch, true); bot.swingArm('right') } catch {}
+    }, 90000)
+    bot.once('end', () => clearInterval(idleTimer))
 
     bot.on('login', () => {
       if (this.bot !== bot) return

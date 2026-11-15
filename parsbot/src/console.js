@@ -5,10 +5,12 @@
 //   bots | roles | stop | help
 const HELP = [
   'role <ربات|all> <builder|survivor|idle> — نقش ربات (سازنده=creative / بقا=survival+اکتشاف / بیکار)',
+  'all|builders|survivors <دستور> ... — فرمان گروهی به همه / فقط سازنده‌ها / فقط بقاها (مثلاً: all tome  |  survivors get الماس 3)',
   '<ربات|all> <دستور> ... — اجرای دستور روی یک ربات. مثال: Bot2 get الماس 3  |  Bot3 find روستا  |  all stop',
   'build castle [size=57] [seed=7] [style=royal|gothic|azure|sun|forest] [at=x,z] [flatten=0] — ساخت گروهی (همه‌ی سازنده‌ها)',
   'build castle size=49 gather=1 — ربات‌ها مصالح را خودشان جمع می‌کنند (کبل‌استون/چوب...)؛ خیلی کندتر ولی واقعی',
   'get <چیز> [تعداد] — ربات بقا می‌رود و می‌آورد | find <چیز> — می‌گردد و مختصات می‌دهد | explore [مرحله]',
+  'speed 1..5|auto — سرعت ساخت | stall <ثانیه>|on|off — مدیر (راه‌اندازی مجدد ربات‌های گیرکرده)',
   'bots | roles | goals | buildinfo | buildstop | stop | help'
 ]
 
@@ -22,6 +24,17 @@ async function runLine (fleet, line) {
     for (const m of fleet.bots.values()) { const s = m.status(); out.push(`${m.id === (fleet.leader() && fleet.leader().id) ? '★' : ' '} ${m.id} | ${m.connection} | نقش: ${m.role} | کار: ${m.mode.name}${m.mode.detail ? ' (' + m.mode.detail + ')' : ''}${s.gameMode ? ' | ' + s.gameMode : ''}${s.position ? ' | ' + s.position.x + ',' + s.position.y + ',' + s.position.z : ''}`) }
     return out.length ? out : ['هیچ رباتی نیست.']
   }
+  if (first === 'speed' || first === 'سرعت') {
+    const v = (toks[1] || '').toLowerCase()
+    if (!v) return [`سرعت فعلی: ${fleet.settings.auto ? 'خودکار' : fleet.settings.speed} (تأخیر ${fleet.delayMs()}ms). استفاده: speed 1..5 | speed auto`]
+    fleet.setSettings(v === 'auto' || v === 'خودکار' ? { auto: true } : { auto: false, speed: v })
+    return [`✅ سرعت ساخت: ${fleet.settings.auto ? 'خودکار' : fleet.settings.speed} (تأخیر ${fleet.delayMs()}ms)`]
+  }
+  if (first === 'stall' || first === 'گیرکردن') {
+    if (!toks[1]) return [`مدیر: ${fleet.settings.supervisor ? 'روشن' : 'خاموش'} | مهلت گیر کردن ${fleet.settings.stallSeconds}s. استفاده: stall <ثانیه> | stall off | stall on`]
+    if (toks[1] === 'off') fleet.setSettings({ supervisor: false }); else if (toks[1] === 'on') fleet.setSettings({ supervisor: true }); else fleet.setSettings({ stallSeconds: toks[1] })
+    return [`✅ مدیر: ${fleet.settings.supervisor ? 'روشن' : 'خاموش'} | مهلت ${fleet.settings.stallSeconds}s`]
+  }
   if (first === 'role' || first === 'نقش') {
     const [, who, roleName] = toks
     if (!who || !roleName) return ['استفاده: role <ربات|all> <builder|survivor|idle>']
@@ -34,7 +47,7 @@ async function runLine (fleet, line) {
 
   // نام ربات؟
   let targets; let rest
-  if (first === 'all' || first === 'همه') { targets = fleet.online(); rest = toks.slice(1) } else if (fleet.get(toks[0])) { targets = [fleet.get(toks[0])]; rest = toks.slice(1) } else {
+  if (first === 'all' || first === 'همه') { targets = fleet.online(); rest = toks.slice(1) } else if (first === 'builders' || first === 'سازنده‌ها' || first === 'سازنده‌ها') { targets = fleet.online().filter(m => m.role === 'builder'); rest = toks.slice(1) } else if (first === 'survivors' || first === 'بقاها') { targets = fleet.online().filter(m => m.role === 'survivor'); rest = toks.slice(1) } else if (fleet.get(toks[0])) { targets = [fleet.get(toks[0])]; rest = toks.slice(1) } else {
     // ساخت: ربات سازنده‌ی اصلی؛ بقیه: ربات اصلی
     const lead = (first === 'build' || first === 'بساز') ? (fleet.builders()[0] || fleet.leader()) : fleet.leader()
     targets = lead ? [lead] : []; rest = toks

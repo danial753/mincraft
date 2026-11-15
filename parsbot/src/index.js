@@ -26,34 +26,37 @@ function saveLocal (patch) {
 }
 
 const fleet = new Fleet(config)
+if (local.settings) fleet.setSettings(local.settings)
 fleet.on('log', (e) => console.log(`[${e.botId}] ${e.message}`))
-const { token } = startDashboard(fleet, config, {
+const { token, ready } = startDashboard(fleet, config, {
   getSaved: () => local.lastServer || null,
-  save: (sel) => saveLocal({ lastServer: sel })
+  save: (sel) => saveLocal({ lastServer: sel }),
+  saveSettings: (st) => saveLocal({ settings: st })
 })
-
-const dash = config.dashboard || {}
-const url = `http://${dash.host === '0.0.0.0' ? '127.0.0.1' : (dash.host || '127.0.0.1')}:${dash.port || 3000}/#token=${token}`
 
 function openBrowser (u) {
   const cmd = process.platform === 'win32' ? `start "" "${u}"` : process.platform === 'darwin' ? `open "${u}"` : `xdg-open "${u}"`
   exec(cmd, (err) => { if (err) console.log('مرورگر خودکار باز نشد؛ این آدرس را در مرورگر باز کن:\n' + u) })
 }
 
-console.log(`\n  ${config.brand} — چندرباته + سازنده\n  داشبورد: ${url}\n`)
+ready.then((actualPort) => {
+  const dash = config.dashboard || {}
+  const url = `http://${dash.host === '0.0.0.0' ? '127.0.0.1' : (dash.host || '127.0.0.1')}:${actualPort}/#token=${token}`
+  console.log(`\n  ${config.brand} — چندرباته + سازنده\n  داشبورد: ${url}\n`)
+  if (!flag('no-open')) setTimeout(() => openBrowser(url), 500)
 
-// اتصال مستقیم با آرگومان (اختیاری)
-if (arg('host')) {
-  const m = /^(.*):(\d{2,5})$/.exec(arg('host'))
-  const host = m ? m[1] : arg('host'); const port = arg('port') || (m && m[2]) || 25565
-  if (arg('owner')) config.owner = arg('owner')
-  const bots = Math.max(1, parseInt(arg('bots') || '1'))
-  for (let i = 0; i < bots; i++) setTimeout(() => { try { fleet.add(null, { host, port, username: arg('username') || 'Bot', version: arg('version'), role: arg('role'), auth: arg('auth') }) } catch (e) { console.log('❌', e.message) } }, i * 4500)
-} else if (arg('profile')) {
-  const bots = Math.max(1, parseInt(arg('bots') || '1'))
-  for (let i = 0; i < bots; i++) setTimeout(() => { try { fleet.add(arg('profile'), { username: arg('username'), version: arg('version'), role: arg('role') }) } catch (e) { console.log('❌', e.message) } }, i * 4500)
-}
-if (!flag('no-open')) setTimeout(() => openBrowser(url), 800)
+  // اتصال مستقیم با آرگومان (اختیاری)
+  if (arg('host')) {
+    const m = /^(.*):(\d{2,5})$/.exec(arg('host'))
+    const host = m ? m[1] : arg('host'); const port = arg('port') || (m && m[2]) || 25565
+    if (arg('owner')) config.owner = arg('owner')
+    const bots = Math.max(1, parseInt(arg('bots') || '1'))
+    for (let i = 0; i < bots; i++) setTimeout(() => { try { fleet.add(null, { host, port, username: arg('username') || 'Bot', version: arg('version'), role: arg('role'), auth: arg('auth') }) } catch (e) { console.log('❌', e.message) } }, i * 4500)
+  } else if (arg('profile')) {
+    const bots = Math.max(1, parseInt(arg('bots') || '1'))
+    for (let i = 0; i < bots; i++) setTimeout(() => { try { fleet.add(arg('profile'), { username: arg('username'), version: arg('version'), role: arg('role') }) } catch (e) { console.log('❌', e.message) } }, i * 4500)
+  }
+}).catch((err) => { console.log('❌ داشبورد بالا نیامد:', err.message); process.exit(1) })
 
 // کنسول ترمینال (اختیاری): همان دستورات داشبورد
 if (process.stdin.isTTY) {

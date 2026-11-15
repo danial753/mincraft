@@ -65,7 +65,7 @@ class BuildJob extends EventEmitter {
       // اگر هیچ‌کدام تکیه‌گاه ندارند و کسی مشغول نیست، نزدیک‌ترین را امتحان کن (جلوگیری از قفل شدن)
       if (!best && fb && pending === 0 && this.counts.claimed === 0) best = fb
       if (!best) return 'wait'
-      best.owner = botId; this._set(best, 'claimed'); return best
+      best.owner = botId; best.claimedAt = Date.now(); this._set(best, 'claimed'); return best
     }
     const y = this.currentLayer()
     if (y === null) return null
@@ -87,11 +87,12 @@ class BuildJob extends EventEmitter {
     if (!pick && fallback && pending === 0) pick = fallback
     if (!pick) return 'wait'
     pick.owner = botId
+    pick.claimedAt = Date.now()
     this._set(pick, 'claimed')
     return pick
   }
 
-  done (e) { this._set(e, 'done'); this._check() }
+  done (e) { this.progressAt = Date.now(); this._set(e, 'done'); this._check() }
 
   fail (e, message, fatal = false) {
     e.tries++
@@ -105,6 +106,16 @@ class BuildJob extends EventEmitter {
 
   release (botId) {
     for (const e of this.all) if (e.state === 'claimed' && e.owner === botId) { e.owner = null; this._set(e, 'todo') }
+  }
+
+  // آزاد کردن claim‌های کهنه: مالک مرده/گیرکرده یا claim خیلی قدیمی (جلوگیری از قفل شدن کل ساخت)
+  releaseStale (isAlive, maxAgeMs) {
+    let n = 0; const now = Date.now()
+    for (const e of this.all) {
+      if (e.state !== 'claimed') continue
+      if (!isAlive(e.owner) || (now - (e.claimedAt || now)) > maxAgeMs) { e.owner = null; this._set(e, 'todo'); n++ }
+    }
+    return n
   }
 
   cancel () { this.cancelled = true; this._check() }

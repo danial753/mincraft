@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>پارس‌بات — داشبورد</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b27; --panel2: #1c2333; --border: #2a3348;
+    --text: #e6edf3; --muted: #8b98b3; --green: #3fb950; --red: #f85149;
+    --yellow: #d29922; --blue: #58a6ff; --accent: #7c5cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', Tahoma, 'Vazirmatn', sans-serif;
+    min-height: 100vh; padding: 16px;
+    background-image: radial-gradient(circle at 20% 0%, rgba(124,92,255,.08), transparent 40%),
+                      radial-gradient(circle at 80% 100%, rgba(63,185,80,.06), transparent 40%);
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo .cube {
+    width: 40px; height: 40px; border-radius: 8px;
+    background: linear-gradient(135deg, #3fb950 0%, #2ea043 50%, #1a7f37 100%);
+    display: grid; place-items: center; font-size: 22px;
+    box-shadow: 0 0 20px rgba(63,185,80,.3);
+  }
+  h1 { font-size: 22px; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge {
+    padding: 6px 14px; border-radius: 20px; font-size: 13px;
+    border: 1px solid var(--border); background: var(--panel);
+  }
+  .badge.online { color: var(--green); border-color: var(--green); }
+  .badge.connecting { color: var(--yellow); border-color: var(--yellow); }
+  .badge.offline { color: var(--red); border-color: var(--red); }
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin-bottom: 12px; color: var(--blue); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  input, select {
+    width: 100%; padding: 9px 12px; border-radius: 8px;
+    background: var(--panel2); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button {
+    padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 13px; font-family: inherit; font-weight: 600;
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    transition: all .15s;
+  }
+  button:hover { border-color: var(--accent); transform: translateY(-1px); }
+  button.primary { background: linear-gradient(135deg, #2ea043, #1a7f37); border: none; color: #fff; }
+  button.danger { background: linear-gradient(135deg, #da3633, #b62324); border: none; color: #fff; }
+  button:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-row button { flex: 1; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat {
+    background: var(--panel2); border-radius: 10px; padding: 12px;
+    border: 1px solid var(--border);
+  }
+  .stat .k { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .stat .v { font-size: 16px; font-weight: 700; direction: ltr; text-align: right; }
+  .bar { height: 8px; background: #21262d; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 4px; transition: width .5s; }
+  .bar .hp { background: linear-gradient(90deg, #f85149, #ff7b72); }
+  .bar .fd { background: linear-gradient(90deg, #d29922, #e3b341); }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .quick button { padding: 7px 12px; font-size: 12px; }
+  .console {
+    background: #0a0e14; border-radius: 10px; padding: 12px;
+    height: 300px; overflow-y: auto; font-size: 12.5px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    border: 1px solid var(--border); line-height: 1.7;
+  }
+  .console .line { white-space: pre-wrap; word-break: break-word; }
+  .console .t { color: #566181; margin-left: 6px; font-size: 11px; }
+  .lv-info { color: #9ecbff; } .lv-error { color: #ff7b72; }
+  .lv-warn { color: #e3b341; } .lv-chat { color: #7ee787; }
+  .lv-combat { color: #ffa198; } .lv-survival { color: #d2a8ff; }
+  .lv-msa { color: #ffd33d; font-weight: bold; }
+  .chat-row { display: flex; gap: 8px; margin-top: 10px; }
+  .chat-row input { flex: 1; }
+  .msa-banner {
+    display: none; background: linear-gradient(135deg, #4d2d00, #3a2300);
+    border: 1px solid var(--yellow); border-radius: 12px;
+    padding: 14px 18px; margin-bottom: 16px; font-size: 14px;
+  }
+  .msa-banner code {
+    background: #000; padding: 3px 10px; border-radius: 6px;
+    font-size: 18px; letter-spacing: 2px; color: var(--yellow);
+  }
+  .msa-banner a { color: var(--blue); }
+  .players { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .player-chip {
+    background: var(--panel2); padding: 4px 10px; border-radius: 12px;
+    font-size: 12px; border: 1px solid var(--border); cursor: pointer;
+  }
+  .player-chip:hover { border-color: var(--accent); }
+  .cmd-help { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.8; }
+  footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: 8px; }
+
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .tab { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .tab.sel { border-color: var(--accent); background: var(--panel2); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+  .dot.online { background: var(--green); } .dot.connecting { background: var(--yellow); }
+  .tab small { color: var(--muted); font-size: 11px; }
+  .progress { height: 14px; background: #21262d; border-radius: 7px; overflow: hidden; margin: 10px 0 6px; }
+  .progress > div { height: 100%; background: linear-gradient(90deg, #7c5cff, #3fb950); transition: width .6s; width: 0; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.7; }
+
+
+  table.bots { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.bots th, table.bots td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  table.bots th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--red); margin-left: 6px; }
+  .dot.online { background: var(--green); } .dot.connecting { background: var(--yellow); }
+  .progress { height: 14px; background: #21262d; border-radius: 7px; overflow: hidden; margin: 10px 0 6px; }
+  .progress > div { height: 100%; background: linear-gradient(90deg, #7c5cff, #3fb950); transition: width .6s; width: 0; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.7; }
+  .topnav a { color: var(--accent); text-decoration: none; font-size: 13px; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; }
+  select.role { min-width: 150px; }
+
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo"><div class="cube">🎛</div><div><h1>مرکز فرماندهی گروه</h1><div class="sub">یک‌جا به همه‌ی ربات‌ها دستور بده و نقش‌ها را تعیین کن</div></div></div>
+    <div class="badges topnav"><span class="badge" id="buildBadge">ساخت: —</span><a id="backLink" href="index.html">← صفحه‌ی اصلی</a></div>
+  </header>
+
+  <div class="card">
+    <h2>🤖 ربات‌ها و نقش‌ها</h2>
+    <div style="overflow-x:auto"><table class="bots" id="botsTable"><thead><tr><th><input type="checkbox" id="selAll" style="width:auto"></th><th>ربات</th><th>نقش</th><th>حالت بازی</th><th>کار</th><th>هدف</th><th>کارگر (ساخت)</th><th>موقعیت</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="btn-row">
+      <button id="allBuilder">🏗 همه سازنده</button>
+      <button id="allSurvivor">⛏ همه بقا</button>
+      <button id="allIdle">💤 همه بیکار</button>
+      <button id="selBuilder">انتخاب‌شده‌ها ← سازنده</button>
+      <button id="selSurvivor">انتخاب‌شده‌ها ← بقا</button>
+    </div>
+    <div class="hint">سازنده = حالت creative و شرکت در ساخت گروهی. بقا = حالت survival؛ می‌روند اکتشاف می‌کنند و هر چه بگویی پیدا می‌کنند. برای عوض شدن حالت بازی ربات باید OP باشد.</div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>📣 فرمان به همه (یک‌جا)</h2>
+        <label>گیرنده</label>
+        <select id="target"><option value="all">همه‌ی ربات‌ها</option><option value="builders">فقط سازنده‌ها</option><option value="survivors">فقط بقاها</option><option value="ids">فقط انتخاب‌شده‌ها (تیک جدول)</option></select>
+        <div class="quick" id="quick" style="margin-top:12px"></div>
+        <div class="chat-row"><input id="line" dir="ltr" placeholder="مثال: tome | stop | doctor | get الماس 3 | find روستا"><button class="primary" id="send">ارسال به همه</button></div>
+        <div class="hint">دکمه‌های بالا همان دستورها را به گیرنده‌ی انتخاب‌شده می‌فرستند. «بیایید پیشم» همه را پیش خودت (اسم صاحب) تلپورت می‌کند.</div>
+      </div>
+      <div class="card">
+        <h2>⛏ هدف برای ربات‌های بقا</h2>
+        <div class="row"><div><label>چه چیزی؟ (الماس، آهن، چوب، غذا، روستا ...)</label><input id="goalName" placeholder="الماس"></div><div><label>تعداد</label><input id="goalCount" value="1" dir="ltr"></div></div>
+        <div class="btn-row"><button class="primary" id="gGet">🎒 همه‌ی بقاها بیاورند</button><button id="gFind">🔭 پیدا کنند</button><button id="gExplore">🧭 اکتشاف</button><button class="danger" id="gCancel">لغو هدف‌ها</button></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>⚙ مدیر و سرعت ساخت</h2>
+        <label>سرعت ساخت: <b id="spLabel">۳</b> <small id="spDelay" style="color:var(--muted)"></small></label>
+        <input type="range" id="speed" min="1" max="5" step="1" value="3" style="width:100%">
+        <div class="hint">۱ = آهسته و امن (سرور ضعیف / Aternos) ... ۵ = حداکثر سرعت. اگر ربات‌ها کیک می‌شوند یا بلاک‌ها ناموفق است، سرعت را کم کن.</div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="auto" style="width:auto"> خودکار: اگر سرور لَگ داشت خودش آهسته‌تر شود و اگر روان بود سریع‌تر</label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="sup" checked style="width:auto"> مدیر روشن باشد (ربات گیرکرده را پیدا و دوباره راه‌اندازی می‌کند)</label>
+        <div class="row"><div><label>مهلت گیر کردن (ثانیه)</label><input id="stall" value="45" dir="ltr"></div><div style="display:flex;align-items:end"><button class="primary" id="applySet" style="width:100%">اعمال تنظیمات</button></div></div>
+        <div class="hint" id="setMsg">مدیر هر ۳ ثانیه کارگرها را می‌بیند: رباتی که بیش از مهلت پیشرفتی نکند از نو شروع می‌کند، و اگر مدام گیر کند قطع و دوباره وصل می‌شود. بلاک‌هایی که ربات مرده رها کرده را هم آزاد می‌کند.</div>
+      </div>
+      <div class="card">
+        <h2>🏗 ساخت گروهی (همه‌ی سازنده‌ها)</h2>
+        <div class="row"><div><label>نقشه</label><select id="bpType"></select></div><div><label>سبک (قلعه)</label><select id="bpStyle"><option value="">تصادفی</option><option>royal</option><option>gothic</option><option>azure</option><option>sun</option><option>forest</option></select></div></div>
+        <div class="row"><div><label>اندازه</label><input id="bpSize" dir="ltr" placeholder="49"></div><div><label>seed</label><input id="bpSeed" dir="ltr" placeholder="خودکار"></div></div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="bpGather" style="width:auto"> مصالح را خودشان جمع کنند (کندتر)</label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="bpFlat" checked style="width:auto"> زمین را هموار کنند</label>
+        <div class="hint">جای ساخت: جلوی خودت (جایی که بازیکن صاحب ایستاده؛ دروازه‌ی قلعه رو به توست). برای جای دیگر در صفحه‌ی اصلی X و Z بده.</div>
+        <div class="btn-row"><button id="dry">👁 پیش‌نمایش</button><button class="primary" id="go">🚀 شروع ساخت</button><button class="danger" id="stop">🛑 توقف</button></div>
+        <div class="progress"><div id="bar"></div></div>
+        <div class="hint" id="info">بدون ساخت فعال.</div>
+      </div>
+      <div class="card">
+        <h2>📜 خروجی و لاگ</h2>
+        <div class="console" id="console"></div>
+      </div>
+    </div>
+  </div>
+  <footer>ParsBot — مرکز فرماندهی</footer>
+</div>
+<script>
+const $ = id => document.getElementById(id)
+const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+const m = /token=([a-f0-9]+)/.exec(location.hash)
+if (m) { sessionStorage.setItem('tok', m[1]); history.replaceState(null, '', location.pathname) }
+const TOKEN = sessionStorage.getItem('tok') || prompt('توکن داشبورد (در ترمینال چاپ شده):') || ''
+if (TOKEN) sessionStorage.setItem('tok', TOKEN)
+$('backLink').href = 'index.html#token=' + TOKEN
+async function api (path, method, body) {
+  const r = await fetch(path, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', 'x-token': TOKEN }, body: body ? JSON.stringify(body) : undefined })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.error || 'خطا')
+  return j
+}
+const fail = e => alert(e.message)
+function out (msg, level) { const c = $('console'); const d = document.createElement('div'); d.className = 'line lv-' + (level || 'info'); d.innerHTML = '<span class="t">' + new Date().toLocaleTimeString('fa-IR') + '</span>' + esc(msg); c.appendChild(d); while (c.children.length > 300) c.removeChild(c.firstChild); c.scrollTop = c.scrollHeight }
+
+const workerNames = { placing: 'در حال چیدن', waiting: 'منتظر نوبت', gathering: 'جمع‌آوری مصالح', moving: 'در حرکت', idle: '—' }
+let last = { bots: [] }; const checked = new Set()
+const modeNames = { idle: 'بیکار', follow: 'دنبال', goto: 'در مسیر', come: 'آمدن', attack: 'حمله', hunt: 'شکار', mine: 'معدن', farm: 'کشاورزی', fish: 'ماهی', collect: 'جمع‌آوری', build: 'ساخت 🏗', survive: 'بقا ⛏' }
+function renderBots (st) {
+  last = st
+  const tb = document.querySelector('#botsTable tbody')
+  // انتخاب نقش را وقتی کاربر دارد انتخاب می‌کند خراب نکن
+  if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('role')) return
+  tb.innerHTML = ''
+  for (const b of st.bots) {
+    const tr = document.createElement('tr')
+    tr.innerHTML = '<td><input type="checkbox" data-id="' + esc(b.id) + '" ' + (checked.has(b.id) ? 'checked' : '') + ' style="width:auto"></td>' +
+      '<td><span class="dot ' + b.connection + '"></span><b>' + esc(b.id) + '</b>' + (b.id === st.leader ? ' ★' : '') + '</td>' +
+      '<td><select class="role" data-id="' + esc(b.id) + '"><option value="builder">🏗 سازنده</option><option value="survivor">⛏ بقا</option><option value="idle">💤 بیکار</option></select></td>' +
+      '<td>' + esc(b.gameMode || '—') + '</td><td>' + esc(modeNames[b.mode.name] || b.mode.name) + '</td>' +
+      '<td>' + (b.goals && b.goals.current ? esc(b.goals.current) : '—') + '</td>' +
+      '<td>' + (b.worker ? esc(workerNames[b.worker.state] || b.worker.state) + (b.worker.restarts ? ' <small title="تعداد راه‌اندازی مجدد توسط مدیر">🛠×' + b.worker.restarts + '</small>' : '') : '—') + '</td>' +
+      '<td dir="ltr">' + (b.position ? b.position.x + ', ' + b.position.y + ', ' + b.position.z : '—') + '</td>' +
+      '<td><button data-del="' + esc(b.id) + '" class="danger">حذف</button></td>'
+    tr.querySelector('select.role').value = b.role
+    tb.appendChild(tr)
+  }
+  tb.querySelectorAll('input[type=checkbox]').forEach(c => { c.onchange = () => { c.checked ? checked.add(c.dataset.id) : checked.delete(c.dataset.id) } })
+  tb.querySelectorAll('select.role').forEach(sel => { sel.onchange = () => { api('/api/bots/' + sel.dataset.id + '/role', 'POST', { role: sel.value }).then(() => sel.blur()).catch(fail) } })
+  tb.querySelectorAll('button[data-del]').forEach(bt => { bt.onclick = () => { if (confirm('حذف ' + bt.dataset.del + '؟')) api('/api/bots/' + bt.dataset.del, 'DELETE').catch(fail) } })
+  const j = st.build
+  if (j) { $('bar').style.width = j.percent + '%'; $('buildBadge').textContent = 'ساخت: ' + j.name + ' ' + j.percent + '%' + (j.finished ? ' ✅' : ''); $('info').textContent = 'مرحله ' + j.stageIndex + '/' + j.stages + ': ' + (j.stage || '') + ' | ' + j.done + '/' + j.total + ' | ناموفق ' + j.failed + ' | ' + j.seconds + ' ثانیه' + (j.topFailures.length ? ' | علت: ' + j.topFailures.map(x => x[0] + '(' + x[1] + ')').join('، ') : '') } else { $('bar').style.width = '0'; $('buildBadge').textContent = 'ساخت: —' }
+}
+$('selAll').onchange = (e) => { document.querySelectorAll('#botsTable tbody input[type=checkbox]').forEach(c => { c.checked = e.target.checked; e.target.checked ? checked.add(c.dataset.id) : checked.delete(c.dataset.id) }) }
+const setRoles = async (ids, role) => { for (const id of ids) { try { await api('/api/bots/' + id + '/role', 'POST', { role }) } catch (e) { out('❌ ' + id + ': ' + e.message, 'error') } } out('نقش ' + ids.length + ' ربات ← ' + role) }
+$('allBuilder').onclick = () => setRoles(last.bots.map(b => b.id), 'builder')
+$('allSurvivor').onclick = () => setRoles(last.bots.map(b => b.id), 'survivor')
+$('allIdle').onclick = () => setRoles(last.bots.map(b => b.id), 'idle')
+$('selBuilder').onclick = () => setRoles([...checked], 'builder')
+$('selSurvivor').onclick = () => setRoles([...checked], 'survivor')
+
+async function sendTeam (line) {
+  const target = $('target').value
+  if (target === 'ids' && !checked.size) return alert('اول در جدول ربات‌ها تیک بزن')
+  out('› [' + target + '] ' + line, 'chat')
+  try { const r = await api('/api/team/command', 'POST', { target, line, ids: [...checked] }); for (const l of r.lines) out(l) } catch (e) { out('❌ ' + e.message, 'error') }
+}
+for (const [cmd, label] of [['tome', '📍 همه بیایید پیشم'], ['creative', '🎨 creative'], ['stop', '✋ توقف'], ['doctor', '🩺 تشخیص'], ['pos', '🧭 موقعیت'], ['buildinfo', '🏗 پیشرفت']]) { const b = document.createElement('button'); b.textContent = label; b.onclick = () => sendTeam(cmd); $('quick').appendChild(b) }
+$('send').onclick = () => { const l = $('line').value.trim(); if (l) { sendTeam(l); $('line').value = '' } }
+$('line').onkeydown = e => { if (e.key === 'Enter') $('send').onclick() }
+const goal = (c) => { const n = $('goalName').value.trim(); if (!n) return alert('اسم چیز را بنویس'); out('› [بقاها] ' + c + ' ' + n); api('/api/team/command', 'POST', { target: 'survivors', line: c + ' ' + n.replace(/\s+/g, '_') + ' ' + ($('goalCount').value || 1) }).then(r => r.lines.forEach(l => out(l))).catch(e => out('❌ ' + e.message, 'error')) }
+$('gGet').onclick = () => goal('get'); $('gFind').onclick = () => goal('find')
+$('gExplore').onclick = () => { api('/api/team/command', 'POST', { target: 'survivors', line: 'explore ' + ($('goalCount').value || 5) }).then(r => r.lines.forEach(l => out(l))).catch(e => out('❌ ' + e.message, 'error')) }
+$('gCancel').onclick = () => api('/api/team/command', 'POST', { target: 'survivors', line: 'cancelgoals' }).then(r => r.lines.forEach(l => out(l))).catch(e => out('❌ ' + e.message, 'error'))
+
+function buildReq (dry) { const params = {}; if ($('bpStyle').value) params.style = $('bpStyle').value; if ($('bpSeed').value.trim()) params.seed = $('bpSeed').value.trim(); if ($('bpSize').value.trim()) params.size = $('bpSize').value.trim(); if ($('bpGather').checked) params.gather = '1'; return { type: $('bpType').value, params, dry, flatten: $('bpFlat').checked } }
+$('dry').onclick = async () => { try { const r = await api('/api/build', 'POST', buildReq(true)); const s = r.summary; out('پیش‌نمایش: ' + (s.style ? 'سبک ' + s.style + ' seed ' + s.seed + ' | ' : '') + s.blocks + ' بلاک، ابعاد ' + s.size.x + '×' + s.size.y + '×' + s.size.z) } catch (e) { fail(e) } }
+$('go').onclick = async () => { try { out('در حال آماده‌سازی ساخت (نقشه‌برداری...)'); const r = await api('/api/build', 'POST', buildReq(false)); out('🚀 شروع شد' + (r.near ? ' — جلوی ' + r.near : '') + ' | ' + r.team.join(', ')) } catch (e) { fail(e) } }
+$('stop').onclick = () => api('/api/build/stop', 'POST', {}).then(() => out('🛑 ساخت متوقف شد')).catch(fail)
+api('/api/blueprints').then(b => { for (const [k, v] of Object.entries(b)) { const o = document.createElement('option'); o.value = k; o.textContent = k + ' — ' + v.desc.slice(0, 40); $('bpType').appendChild(o) } }).catch(() => {})
+
+
+const spNames = { 1: '۱ — آهسته و امن', 2: '۲ — کند', 3: '۳ — متوسط', 4: '۴ — سریع', 5: '۵ — حداکثر' }
+$('speed').oninput = () => { $('spLabel').textContent = spNames[$('speed').value] }
+function loadSettings () { api('/api/settings').then(r => { $('speed').value = r.speed; $('auto').checked = r.auto; $('sup').checked = r.supervisor; $('stall').value = r.stallSeconds; $('spLabel').textContent = r.auto ? 'خودکار' : spNames[r.speed]; $('spDelay').textContent = '(تأخیر هر بلاک: ' + r.delayMs + ' میلی‌ثانیه)' }).catch(() => {}) }
+$('applySet').onclick = async () => { try { const r = await api('/api/settings', 'POST', { speed: $('speed').value, auto: $('auto').checked, supervisor: $('sup').checked, stallSeconds: $('stall').value }); $('setMsg').textContent = '✅ اعمال شد (تأخیر ' + r.settings.delayMs + ' میلی‌ثانیه)'; loadSettings() } catch (e) { fail(e) } }
+loadSettings()
+
+api('/api/status').then(renderBots).catch(fail)
+function connectWS () {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?token=' + encodeURIComponent(TOKEN))
+  ws.onmessage = ev => { const { type, data } = JSON.parse(ev.data); if (type === 'status') renderBots(data); else if (type === 'log' && data.level !== 'chat') out('[' + data.botId + '] ' + data.message, data.level) }
+  ws.onclose = () => setTimeout(connectWS, 2000)
+}
+connectWS()
+</script>
+</body>
+</html>

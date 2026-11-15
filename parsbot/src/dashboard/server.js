@@ -86,10 +86,21 @@ module.exports = function startDashboard (fleet, config, hooks = {}) {
     if (Array.isArray(bots) && bots.length) team = fleet.online().filter(m => bots.includes(m.id))
     if (!team.length && !dry) throw new Error('ربات آنلاینی با نقش builder نیست.')
     const r = await fleet.project({ type: String(type), opts: params, team: team.length ? team : fleet.online(), at: at && Number.isFinite(at.x) && Number.isFinite(at.z) ? at : null, flatten, force, dry: !!dry })
-    return { summary: { name: r.bp.name, blocks: r.info.blocks, size: r.info.size, counts: r.info.counts, seed: r.info.seed, style: r.info.style, flatten: r.info.flatten }, origin: r.origin }
+    return { summary: { name: r.bp.name, blocks: r.info.blocks, size: r.info.size, counts: r.info.counts, seed: r.info.seed, style: r.info.style, flatten: r.info.flatten }, origin: r.origin, near: r.info.near === 'ربات' ? null : r.info.near, team: team.map(m => m.id) }
   }))
   app.post('/api/build/stop', safe(() => ({ stopped: fleet.stopBuild() })))
   app.post('/api/bots/:id/role', safe((req) => ({ role: fleet.setRole(req.params.id, String((req.body || {}).role)) })))
+  // تنظیمات مدیر و سرعت ساخت
+  app.get('/api/settings', (req, res) => res.json({ ...fleet.settings, delayMs: fleet.delayMs() }))
+  app.post('/api/settings', safe((req) => { const r = fleet.setSettings(req.body || {}); if (hooks.saveSettings) hooks.saveSettings(fleet.settings); return { settings: r } }))
+  // فرمان گروهی: target = all | builders | survivors | [شناسه‌ها]
+  app.post('/api/team/command', safe(async (req) => {
+    const { target = 'all', line = '', ids = [] } = req.body || {}
+    const text = String(line).trim(); if (!text) throw new Error('دستور خالی است')
+    let lines = []
+    if (target === 'ids') { for (const id of ids) lines.push(...(await require('../console').runLine(fleet, `${id} ${text}`))) } else lines = await require('../console').runLine(fleet, `${target} ${text}`)
+    return { lines }
+  }))
   // کنسول متنی (همان دستورات ترمینال)
   app.post('/api/console', safe(async (req) => ({ lines: await require('../console').runLine(fleet, String((req.body || {}).line || '')) })))
 
@@ -112,10 +123,22 @@ module.exports = function startDashboard (fleet, config, hooks = {}) {
   fleet.on('msa', (c) => broadcast('msa', c))
   const ticker = setInterval(() => broadcast('status', fleet.status()), 1000)
 
-  server.listen(port, host, () => {
-    console.log(`🖥 داشبورد: http://${host}:${port}/#token=${token}`)
-    if (host !== '127.0.0.1' && host !== 'localhost') console.log('⚠ داشبورد روی شبکه باز است؛ توکن را محرمانه نگه دار و ترجیحاً از HTTPS/VPN استفاده کن.')
+  // اگر پورت اشغال بود، خودش پورت آزاد بعدی را امتحان می‌کند (تا ۲۰ پورت بعد)
+  const ready = new Promise((resolve, reject) => {
+    let p = port
+    const attempt = () => {
+      const onError = (err) => {
+        if (err.code === 'EADDRINUSE' && p < port + 20) { console.log(`ℹ پورت ${p} اشغال است؛ پورت ${p + 1} را امتحان می‌کنم...`); p++; attempt() } else reject(err)
+      }
+      server.once('error', onError)
+      server.listen(p, host, () => {
+        server.removeListener('error', onError)
+        if (host !== '127.0.0.1' && host !== 'localhost') console.log('⚠ داشبورد روی شبکه باز است؛ توکن را محرمانه نگه دار و ترجیحاً از HTTPS/VPN استفاده کن.')
+        resolve(p)
+      })
+    }
+    attempt()
   })
   server.on('close', () => clearInterval(ticker))
-  return { server, token }
+  return { server, token, ready }
 }

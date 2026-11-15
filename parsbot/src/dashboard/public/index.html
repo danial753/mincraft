@@ -131,7 +131,7 @@
 <div class="container">
   <header>
     <div class="logo"><div class="cube">🏰</div><div><h1 id="brand">پارس‌بات</h1><div class="sub">چند ربات + ساخت‌وساز مشترک (قلعه، برج، دیوار، هرم)</div></div></div>
-    <div class="badges"><span class="badge" id="buildBadge">ساخت: —</span><span class="badge" id="countBadge">۰ ربات</span><button id="toggleSetup">⚙ اتصال به سرور</button></div>
+    <div class="badges"><span class="badge" id="buildBadge">ساخت: —</span><span class="badge" id="countBadge">۰ ربات</span><button id="toggleSetup">⚙ اتصال به سرور</button><a id="teamLink" href="team.html" style="color:var(--accent);text-decoration:none;font-size:13px;border:1px solid var(--border);padding:6px 12px;border-radius:8px">🎛 مرکز فرماندهی گروه</a></div>
   </header>
 
   <div class="msa-banner" id="msaBanner">🔑 <b>ورود مایکروسافت:</b> به <a id="msaLink" href="#" target="_blank">microsoft.com/link</a> برو و کد <code id="msaCode">—</code> را وارد کن.</div>
@@ -203,7 +203,7 @@
       </div>
 
       <div class="card">
-        <h2>⌨ کنسول (همان دستورات ترمینال)</h2>
+        <h2>⌨ کنسول — دستورها را اینجا بنویس</h2>
         <div class="chat-row"><input id="consoleInput" dir="ltr" placeholder="role Bot2 survivor  |  Bot2 get diamond 3  |  build castle seed=7 style=azure  |  help"><button id="consoleSend">اجرا</button></div>
       </div>
 
@@ -214,9 +214,9 @@
       </div>
 
       <div class="card">
-        <h2>💬 لاگ زنده</h2>
+        <h2>📜 لاگ زنده</h2>
         <div class="console" id="console"></div>
-        <div class="chat-row"><input id="chatInput" placeholder="پیامی که ربات انتخاب‌شده بگوید..."><button class="primary" id="chatSend">ارسال 💬</button></div>
+        <div class="chat-row"><input id="chatInput" placeholder="فقط برای حرف زدن داخل چت بازی (دستورها را در کادر کنسول بنویس)"><button class="primary" id="chatSend">ارسال 💬</button></div>
       </div>
     </div>
   </div>
@@ -293,6 +293,7 @@ function render (st) {
 }
 function showMsa (c) { $('msaBanner').style.display = 'block'; $('msaCode').textContent = c.user_code; $('msaLink').href = c.verification_uri; $('msaLink').textContent = c.verification_uri }
 
+if (document.getElementById('teamLink')) document.getElementById('teamLink').href = 'team.html#token=' + TOKEN
 api('/api/profiles').then(p => { profiles = p; loadProfile() }).catch(fail)
 function loadProfile () { const p = profiles[$('profile').value]; if (!p) return; $('host').value = p.host || ''; $('port').value = p.port || 25565; $('auth').value = p.auth || 'offline'; $('version').value = p.version || '' }
 $('profile').onchange = loadProfile
@@ -316,10 +317,12 @@ async function sendCmd (raw) {
 }
 $('cmdSend').onclick = () => { sendCmd($('cmdInput').value); $('cmdInput').value = '' }
 $('cmdInput').onkeydown = e => { if (e.key === 'Enter') $('cmdSend').onclick() }
-$('chatSend').onclick = async () => { const msg = $('chatInput').value.trim(); if (!msg || !selected) return; try { await api('/api/bots/' + selected + '/chat', 'POST', { message: msg }); $('chatInput').value = '' } catch (e) { fail(e) } }
+$('chatSend').onclick = async () => { const msg = $('chatInput').value.trim(); if (!msg || !selected) return;
+  if (/^(all|build|role|get|find|bots|stop|help|doctor|creative|explore|goals|buildinfo|buildstop)(\s|$)/i.test(msg)) { $('consoleInput').value = msg; $('chatInput').value = ''; return runConsole() }
+  try { await api('/api/bots/' + selected + '/chat', 'POST', { message: msg }); $('chatInput').value = '' } catch (e) { fail(e) } }
 $('chatInput').onkeydown = e => { if (e.key === 'Enter') $('chatSend').onclick() }
 
-for (const [cmd, label] of [['help', '📖 راهنما'], ['pos', '📍 موقعیت'], ['creative', '🎨 creative'], ['buildinfo', '🏗 پیشرفت'], ['stop', '✋ توقف'], ['come', '🏃 بیا'], ['hunt on', '🏹 شکار'], ['hunt off', 'شکار خاموش'], ['farm', '🌾 کشاورزی'], ['eat', '🍗 بخور'], ['armor', '🛡 زره']]) {
+for (const [cmd, label] of [['doctor', '🩺 تشخیص مشکل'], ['help', '📖 راهنما'], ['pos', '📍 موقعیت'], ['creative', '🎨 creative'], ['buildinfo', '🏗 پیشرفت'], ['stop', '✋ توقف'], ['come', '🏃 بیا'], ['hunt on', '🏹 شکار'], ['hunt off', 'شکار خاموش'], ['farm', '🌾 کشاورزی'], ['eat', '🍗 بخور'], ['armor', '🛡 زره']]) {
   const b = document.createElement('button'); b.textContent = label; b.onclick = () => sendCmd(cmd); $('quickBtns').appendChild(b)
 }
 

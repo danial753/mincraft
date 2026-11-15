@@ -22,9 +22,10 @@ class CommandRegistry {
 
   isOwner (username, trusted = false) {
     if (trusted) return true
-    if (this.authed.has(username)) return true
+    const low = String(username).toLowerCase()
+    for (const a of this.authed) if (String(a).toLowerCase() === low) return true
     if (this.config.ownerPassword) return false // با رمز: فقط !login (اسم به‌تنهایی کافی نیست)
-    return !!this.config.owner && username === this.config.owner
+    return !!this.config.owner && low === String(this.config.owner).toLowerCase()
   }
 
   // خروجی: false یعنی دستور ناشناخته

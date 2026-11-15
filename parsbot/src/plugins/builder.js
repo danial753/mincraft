@@ -73,6 +73,7 @@ module.exports = function builder (bot, ctx) {
     const want = Math.max(48, Math.min(512, Math.ceil(remainingOf(name) / teamN) + 8))
     if (!bot.brain) throw fatal('ماژول بقا (survivor) فعال نیست')
     ctx.log('info', `🎒 مصالح ${name} تمام شد؛ می‌روم ${want} تا جمع کنم...`)
+    setState('gathering')
     const wasCreative = isCreative()
     if (wasCreative) { // مانده‌ی کهنه را پاک کن تا کوله پر نشود
       for (const it of bot.inventory.items().filter(i => i.name === name)) { try { await bot.creative.clearSlot(it.slot) } catch {} }
@@ -111,7 +112,10 @@ module.exports = function builder (bot, ctx) {
       if (!def) throw fatal('بلاک/آیتم ناشناخته در این نسخه: ' + name)
       if (!Item) throw fatal('Item در دسترس نیست')
       const slot = 36 + (slotRR++ % 9)
-      await bot.creative.setInventorySlot(slot, new Item(def.id, 64))
+      try { await bot.creative.setInventorySlot(slot, new Item(def.id, 64)) } catch (e) {
+        await sleep(300) // روی بعضی نسخه‌ها تأیید نمی‌آید ولی آیتم گذاشته شده؛ کوله را بررسی کن
+        if (!(bot.inventory.slots[slot] && bot.inventory.slots[slot].name === name)) { await sleep(700); if (!(bot.inventory.slots[slot] && bot.inventory.slots[slot].name === name)) throw e }
+      }
       it = bot.inventory.slots[slot] || bot.inventory.items().find(i => i.name === name)
     }
     if (!it) throw fatal('مصالح کافی نیست: ' + name)
@@ -135,61 +139,73 @@ module.exports = function builder (bot, ctx) {
     return false
   }
   async function fly (to, ms = 9000) { await withTimeout(bot.creative.flyTo(to), ms, 'پرواز طول کشید') }
+  let hasOp = null
   async function moveCreative (target) {
     const hover = findHover(target)
     const p = bot.entity.position
+    if (hasOp === null) hasOp = await canCommand().catch(() => false)
+    // پرش‌های دور: با OP تلپورت مستقیم (پرواز روی نسخه‌های جدید و فاصله‌ی زیاد گاهی گیر می‌کند)
+    if (hasOp && p.distanceTo(hover) > 14) { if (await tpTo(hover)) return }
     try {
       if (p.distanceTo(hover) > 10 && curJob && curJob.cruiseY) {
         const cy = Math.max(curJob.cruiseY, p.y, hover.y)
-        await fly(new Vec3(p.x, cy, p.z)); await fly(new Vec3(hover.x, cy, hover.z))
+        await fly(new Vec3(p.x, cy, p.z), 5000); await fly(new Vec3(hover.x, cy, hover.z), 7000)
       }
-      await fly(hover)
+      await fly(hover, 5000)
     } catch (e) {
       if (!(await tpTo(hover))) throw e
     }
   }
-  async function moveInRange (target) {
+  async function moveInRange (target, force = false) {
     const p = bot.entity.position
     const inside = Math.abs(p.x - (target.x + 0.5)) < 0.8 && Math.abs(p.z - (target.z + 0.5)) < 0.8 && p.y < target.y + 1 && p.y + 1.8 > target.y
     const eye = p.offset(0, 1.62, 0)
-    if (!inside && eye.distanceTo(target.offset(0.5, 0.5, 0.5)) <= 4.2) return
+    if (!force && !inside && eye.distanceTo(target.offset(0.5, 0.5, 0.5)) <= 4.2) return
     if (isCreative()) await moveCreative(target)
     else await withTimeout(bot.pathfinder.goto(new goals.GoalPlaceBlock(target, bot.world, { range: 4 })), 25000, 'رسیدن به موقعیت ساخت ممکن نشد')
   }
 
   // نقشه‌برداری ارتفاع زمین: برای هر ستون (x,z) بالاترین بلاک و بالاترین «زمین» (بدون درخت)
   const TREE = /_log$|_leaves$|_wood$|^vine$|mushroom_block|bee_nest|^cactus$|_stem$|^snow$|^snow_block$|^ice$/
-  async function survey (rect, cruiseY) {
+  // لیست قطعه‌های ۱۴×۱۴ برای نقشه‌برداری (تقسیم بین چند ربات)
+  function tilesOf (rect) { const out = []; for (let tx = rect.x0; tx <= rect.x1; tx += 14) for (let tz = rect.z0; tz <= rect.z1; tz += 14) out.push({ tx, tz }); return out }
+  async function surveyTiles (tiles, rect, cruiseY) {
     const cols = new Map()
-    let scanned = 0
     const H = (bot.game && bot.game.height) || 256
     const minY = (bot.game && bot.game.minY) || 0
-    for (let tx = rect.x0; tx <= rect.x1; tx += 14) {
-      for (let tz = rect.z0; tz <= rect.z1; tz += 14) {
-        const cx = Math.min(tx + 7, rect.x1); const cz = Math.min(tz + 7, rect.z1)
-        // نزدیک می‌شویم تا چانک‌ها بارگذاری شوند
-        const y = (cruiseY || 120)
-        if (isCreative()) { try { await fly(new Vec3(cx + 0.5, y, cz + 0.5), 15000) } catch { await tpTo(new Vec3(cx + 0.5, y, cz + 0.5)) } } else await sleep(0)
-        await sleep(250)
-        for (let x = tx; x < Math.min(tx + 14, rect.x1 + 1); x++) for (let z = tz; z < Math.min(tz + 14, rect.z1 + 1); z++) {
-          let top = null; let ground = null; let water = false
-          for (let yy = H - 1; yy >= minY; yy--) {
-            const b = bot.blockAt(new Vec3(x, yy, z))
-            if (!b) { top = undefined; break } // چانک بارگذاری نشده
-            if (b.name === 'air' || b.name === 'cave_air') continue
-            if (b.name === 'water' || b.name === 'lava' || b.liquid) { water = true; continue }
-            if (b.boundingBox !== 'block' && !TREE.test(b.name)) continue // گیاه و ...
-            if (top === null) top = yy
-            if (!TREE.test(b.name)) { ground = yy; break }
-          }
-          if (top === undefined || ground === null) continue
-          cols.set(x + ',' + z, { ground, top: Math.max(top, ground), water })
-          scanned++
+    const op = isCreative() ? await canCommand().catch(() => false) : false
+    const yield_ = () => new Promise(resolve => setImmediate(resolve)) // به حلقه‌ی رویداد نفس بده (تا keepalive بی‌جواب نماند)
+    let n = 0
+    for (const { tx, tz } of tiles) {
+      const cx = Math.min(tx + 7, rect.x1); const cz = Math.min(tz + 7, rect.z1)
+      const y = Math.min(H - 8, cruiseY || 120)
+      if (isCreative()) {
+        const to = new Vec3(cx + 0.5, y, cz + 0.5)
+        if (op) await tpTo(to) // با OP تلپورت مستقیم (پرواز روی نسخه‌های جدید گاهی گیر می‌کند)
+        else { try { await fly(to, 12000) } catch { await tpTo(to) } }
+      }
+      await sleep(400) // چانک‌ها برسند
+      const startY = Math.min(H - 1, Math.floor(bot.entity.position.y) + 70, y + 20)
+      for (let x = tx; x < Math.min(tx + 14, rect.x1 + 1); x++) for (let z = tz; z < Math.min(tz + 14, rect.z1 + 1); z++) {
+        let top = null; let ground = null; let water = false
+        for (let yy = startY; yy >= minY; yy--) {
+          const b = bot.blockAt(new Vec3(x, yy, z))
+          if (!b) { top = undefined; break } // چانک بارگذاری نشده
+          if (b.name === 'air' || b.name === 'cave_air') continue
+          if (b.name === 'water' || b.name === 'lava' || b.liquid) { water = true; continue }
+          if (b.boundingBox !== 'block' && !TREE.test(b.name)) continue // گیاه و ...
+          if (top === null) top = yy
+          if (!TREE.test(b.name)) { ground = yy; break }
         }
+        if (top === undefined || ground === null) continue
+        cols.set(x + ',' + z, { ground, top: Math.max(top, ground), water })
+        if (++n % 25 === 0) await yield_()
       }
     }
     return cols
   }
+  const survey = (rect, cruiseY) => surveyTiles(tilesOf(rect), rect, cruiseY)
+
   async function digAt (block) {
     if (!isCreative()) { try { await bot.tool.equipForBlock(block) } catch {} }
     await bot.dig(block)
@@ -198,9 +214,13 @@ module.exports = function builder (bot, ctx) {
   const dbg = (...a) => { if (process.env.PB_DEBUG) console.log('[dbg]', ...a) }
   async function placeOne (e) {
     const target = new Vec3(e.x, e.y, e.z)
-    const cur = bot.blockAt(target)
+    let cur = bot.blockAt(target)
     dbg('place', e.raw || e.block, target.toString(), 'cur=', cur && cur.name, 'botpos', bot.entity.position.toString())
-    if (!cur) throw new Error('چانک بارگذاری نشده')
+    if (!cur) { // چانک این نقطه برای این ربات بارگذاری نشده؛ اول برو آنجا
+      await moveInRange(target, true)
+      for (let i = 0; i < 12 && !cur; i++) { await sleep(400); cur = bot.blockAt(target) }
+      if (!cur) throw new Error('چانک بارگذاری نشده')
+    }
     const spec = specOf(e)
     if (spec.kind === 'air') { // کندن
       if (cur.name === 'air' || isFluid(cur) || REPLACEABLE.has(cur.name)) return
@@ -233,48 +253,60 @@ module.exports = function builder (bot, ctx) {
     if (gather.on) gather.ledger[spec.item] = (gather.ledger[spec.item] || 0) - 1
   }
 
+  let state = 'idle'; let stateSince = Date.now()
+  function setState (v) { state = v; stateSince = Date.now(); if (bot.builder) { bot.builder.state = v; bot.builder.stateSince = stateSince } }
+
+  let workerSeq = 0
   async function work (job, task) {
     const id = ctx.manager.id
+    const myWorker = ++workerSeq
+    const ss = (v) => { if (myWorker === workerSeq) setState(v) } // کارگر قدیمی (لغوشده) وضعیت کارگر جدید را خراب نکند
     curJob = job
     gather.curTask = task
     try { if (isCreative()) bot.creative.startFlying() } catch {}
     while (!task.cancelled && !job.cancelled) {
+      ss('waiting')
       const e = job.claim(id, bot.entity.position, hasRef)
       if (e === null) break
       if (e === 'wait') { await sleep(400); continue }
+      ss('placing')
       try {
-        await placeOne(e)
+        if (bot.builder.__hang) await new Promise(() => {}) // فقط برای تست مدیر
+        const stallMs = ((ctx.fleet && ctx.fleet.settings.stallSeconds) || 45) * 1000
+        // مهلت هر بلاک: اگر گیر کرد، ربات به بلاک بعدی می‌رود (در حالت جمع‌آوری مصالح مهلت ندارد)
+        await (gather.on ? placeOne(e) : withTimeout(placeOne(e), stallMs, 'مهلت چیدن این بلاک تمام شد'))
         job.done(e)
+        if (ctx.fleet) { ctx.fleet.recordOutcome(true); const d = ctx.fleet.delayMs(); if (d > 0) await sleep(d) }
       } catch (err) {
         if (task.cancelled || job.cancelled) { job.fail(e, 'لغو شد', true); break }
         job.fail(e, String(err.message).slice(0, 60), !!err.fatal)
+        if (ctx.fleet) ctx.fleet.recordOutcome(false)
       }
+      if (state === 'gathering') ss('placing')
     }
+    ss('idle')
     try { if (isCreative()) bot.creative.stopFlying() } catch {}
   }
   // اجرای دستور سرور و گرفتن پاسخ (نیاز به OP)
   let lastCmdAt = 0
   async function cmd (c, wait = 1500) {
-    const gap = 1150 - (Date.now() - lastCmdAt) // ضد اسپم سرور: حداکثر حدود ۱ دستور در ثانیه
+    const gap = (ctx.fleet ? ctx.fleet.cmdGapMs() : 1150) - (Date.now() - lastCmdAt) // ضد اسپم سرور: حداکثر حدود ۱ دستور در ثانیه
     if (gap > 0) await sleep(gap)
     lastCmdAt = Date.now()
     return new Promise((resolve) => {
       const msgs = []
       let done = false
       const finish = () => { if (done) return; done = true; bot.removeListener('messagestr', h); resolve(msgs.join(' | ')) }
-      const h = (m) => { msgs.push(m); if (/fill|block|loaded|Unknown|permission|Changed|Could not|outside|too/i.test(m)) setTimeout(finish, 50) }
+      const h = (m) => { msgs.push(m); if (/fill|block|loaded|Unknown|permission|Changed|Could not|outside|too|Test passed|Teleported|entity data|No entity/i.test(m)) setTimeout(finish, 50) }
       bot.on('messagestr', h)
       bot.chat(c)
       setTimeout(finish, wait)
     })
   }
   async function canCommand () {
-    if (!isCreative()) return false
-    const p = bot.entity.position.floored().offset(0, -3, 0)
-    const r = await cmd(`/setblock ${p.x} ${p.y} ${p.z} bedrock`, 900).catch(() => '')
-    const ok = /Changed the block|Could not set/i.test(r)
-    if (ok) { const b = bot.blockAt(p); if (b && b.name === 'bedrock') await cmd(`/setblock ${p.x} ${p.y} ${p.z} ${b.name === 'bedrock' ? 'dirt' : 'dirt'}`, 600) }
-    return ok
+    // /execute if entity @s فقط برای OP جواب «Test passed» می‌دهد و چیزی را در دنیا عوض نمی‌کند
+    const r = await cmd('/execute if entity @s', 1200).catch(() => '')
+    return /Test passed|passed/i.test(r)
   }
   // fill با رعایت سقف ۳۲۷۶۸ بلاک؛ ربات اول به آن‌جا می‌رود تا چانک بارگذاری شود
   async function fillBox (x0, y0, z0, x1, y1, z1, block) {
@@ -284,7 +316,7 @@ module.exports = function builder (bot, ctx) {
     if (/not loaded|outside/i.test(r)) { await tpTo(new Vec3(c.x, c.y, c.z)); await sleep(800); return cmd(`/fill ${x0} ${y0} ${z0} ${x1} ${y1} ${z1} ${block}`, 1500) }
     return r
   }
-  bot.builder = { work, survey, tpTo, cmd, canCommand, fillBox, gather }
+  bot.builder = { work, survey, surveyTiles, tilesOf, tpTo, cmd, canCommand, fillBox, gather }
 
   const fmt = (s) => `🏗 ${s.name} [${s.stageIndex}/${s.stages}: ${s.stage || ''}]: ${s.percent}% (${s.done}/${s.total}) لایه ${s.layer ?? '—'} | ناموفق ${s.failed} | ${s.seconds}s${s.finished ? ' ✅' : ''}`
 
@@ -350,6 +382,22 @@ module.exports = function builder (bot, ctx) {
     run: async (_b, args, username, reply) => { for (const [k, v] of Object.entries(TYPES)) reply(`${k}: ${v.desc}`) }
   })
 
+  // همه‌ی ربات‌ها پیش صاحب تلپورت شوند (نیاز به OP)
+  ctx.commands.register('tome', {
+    aliases: ['بیا_پیشم', 'پیشم'],
+    desc: 'تلپورت ربات به صاحب (جایی که تو هستی)',
+    usage: 'tome',
+    ownerOnly: true,
+    run: async (_b, args, username, reply) => {
+      const owner = ctx.config.owner
+      if (!owner) return reply('اسم صاحب (owner) تنظیم نشده؛ در صفحه‌ی اتصال بنویس.')
+      const real = Object.keys(bot.players).find(n => n.toLowerCase() === String(owner).toLowerCase()) || owner
+      if (!(await canCommand())) return reply('ربات OP نیست؛ نمی‌تواند تلپورت کند (op ' + bot.username + ')')
+      const r = await cmd(`/tp ${bot.username} ${real}`, 1500)
+      reply(/Teleported|teleported/i.test(r) ? `✅ پیش ${real} آمدم` : '⚠ ' + (r || 'پاسخی نیامد (بازیکن آنلاین است؟)'))
+    }
+  })
+
   ctx.commands.register('creative', {
     aliases: ['کریتیو'],
     desc: 'تلاش برای تغییر به creative (ربات باید OP باشد)',
@@ -360,6 +408,55 @@ module.exports = function builder (bot, ctx) {
       bot.chat('/gamemode creative')
       await sleep(1500)
       reply(isCreative() ? '✅ creative شد.' : '⛔ نشد؛ ربات باید OP باشد (در کنسول سرور: op ' + bot.username + ')')
+    }
+  })
+
+  // ===== doctor: تشخیص مشکل روی همین سرور و همین نسخه =====
+  ctx.commands.register('doctor', {
+    aliases: ['تشخیص', 'سلامت'],
+    desc: 'بررسی سلامت ربات روی این سرور (OP، حالت بازی، چیدن بلاک، نسخه)',
+    usage: 'doctor',
+    ownerOnly: true,
+    run: async (_b, args, username, reply) => {
+      const ok = (m) => reply('✅ ' + m)
+      const bad = (m) => reply('❌ ' + m)
+      reply(`🩺 ${bot.username}: ماینکرفت ${bot.version} | پروتکل ${bot.protocolVersion || '?'} | نقش ${ctx.manager.role}`)
+      const feet = bot.entity.position.floored()
+      const here = bot.blockAt(feet)
+      here ? ok('چانک اطراف بارگذاری شده') : bad('چانک زیر پای ربات بارگذاری نشده')
+      const gm = bot.game && bot.game.gameMode
+      gm === 'creative' ? ok('حالت بازی: creative') : bad(`حالت بازی: ${gm}. برای ساخت سریع باید creative باشد (ربات را OP کن و «creative» بزن) یا از gather=1 استفاده کن.`)
+      const op = await canCommand()
+      op ? ok('ربات OP است (دستورهای /fill و /tp و /gamemode کار می‌کنند)') : bad(`ربات OP نیست. در کنسول سرور بزن: op ${bot.username}`)
+      for (const n of ['stone', 'stone_bricks', 'oak_planks', 'oak_stairs', 'lantern', 'ladder', 'water', 'dirt', 'grass_block']) {
+        if (!bot.registry.blocksByName[n]) bad('این بلاک در این نسخه وجود ندارد: ' + n)
+      }
+      if (!bot.registry.blocksByName.chain && !bot.registry.blocksByName.iron_chain) bad('نه chain و نه iron_chain در این نسخه هست')
+      if (!bot.pathfinder) bad('pathfinder بارگذاری نشده'); else ok('pathfinder بارگذاری شده')
+      if (!Item) bad('prismarine-item بارگذاری نشد (حالت creative کار نمی‌کند)')
+      if (gm === 'creative' && Item) {
+        try {
+          await bot.creative.setInventorySlot(36, new Item(bot.registry.itemsByName.stone.id, 64)); await sleep(500)
+          const got = bot.inventory.slots[36]
+          got && got.name === 'stone' ? ok('گرفتن بلاک از creative کار می‌کند') : bad('creative بلاک را در کوله نگذاشت (مشکل نسخه یا پروتکل)')
+          // آزمایش چیدن: یک بلاک روی زمین جلوی ربات می‌گذارد و برمی‌دارد
+          let done = false
+          for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [3, 1], [1, 3]]) {
+            const ground = bot.blockAt(feet.offset(dx, -1, dz)); const air = bot.blockAt(feet.offset(dx, 0, dz))
+            if (!ground || ground.boundingBox !== 'block' || !air || air.name !== 'air') continue
+            await bot.equip(bot.inventory.slots[36], 'hand')
+            try {
+              await withTimeout(bot._placeBlockWithOptions(ground, new Vec3(0, 1, 0), { swingArm: 'right', forceLook: true }), 6000, 'تأیید چیدن نیامد')
+              const placed = bot.blockAt(feet.offset(dx, 0, dz))
+              placed && placed.name === 'stone' ? ok('چیدن بلاک کار می‌کند') : bad('چیدن بلاک جواب نداد (بلاک: ' + (placed && placed.name) + ')')
+              if (placed && placed.name === 'stone') await bot.dig(placed).catch(() => {})
+            } catch (e) { bad('چیدن بلاک ناموفق: ' + e.message) }
+            done = true; break
+          }
+          if (!done) reply('⚠ جای مناسبی برای آزمایش چیدن نبود؛ ربات را روی زمین باز بگذار.')
+        } catch (e) { bad('آزمایش creative خطا داد: ' + e.message) }
+      }
+      reply('این پیام‌ها را برای من بفرست اگر مشکلی ماند.')
     }
   })
 }
