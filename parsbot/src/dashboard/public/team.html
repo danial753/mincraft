@@ -190,10 +190,12 @@
         <h2>🏗 ساخت گروهی (همه‌ی سازنده‌ها)</h2>
         <div class="row"><div><label>نقشه</label><select id="bpType"></select></div><div><label>سبک (قلعه)</label><select id="bpStyle"><option value="">تصادفی</option><option>royal</option><option>gothic</option><option>azure</option><option>sun</option><option>forest</option></select></div></div>
         <div class="row"><div><label>اندازه</label><input id="bpSize" dir="ltr" placeholder="49"></div><div><label>seed</label><input id="bpSeed" dir="ltr" placeholder="خودکار"></div></div>
+        <div class="row"><div><label>شیب اطراف (ring؛ ۰ = بدون شیب، سریع‌تر)</label><input id="bpRing" dir="ltr" placeholder="4"></div><div></div></div>
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="bpGather" style="width:auto"> مصالح را خودشان جمع کنند (کندتر)</label>
         <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="bpFlat" checked style="width:auto"> زمین را هموار کنند</label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="bpWater" checked style="width:auto"> آب خندق و فواره (بدون تیک = خندق خشک)</label>
         <div class="hint">جای ساخت: جلوی خودت (جایی که بازیکن صاحب ایستاده؛ دروازه‌ی قلعه رو به توست). برای جای دیگر در صفحه‌ی اصلی X و Z بده.</div>
-        <div class="btn-row"><button id="dry">👁 پیش‌نمایش</button><button class="primary" id="go">🚀 شروع ساخت</button><button class="danger" id="stop">🛑 توقف</button></div>
+        <div class="btn-row"><button id="dry">👁 پیش‌نمایش</button><button class="primary" id="go">🚀 شروع ساخت</button><button id="skip">⏭ رد کردن این مرحله</button><button class="danger" id="stop">🛑 توقف</button></div>
         <div class="progress"><div id="bar"></div></div>
         <div class="hint" id="info">بدون ساخت فعال.</div>
       </div>
@@ -272,9 +274,10 @@ $('gGet').onclick = () => goal('get'); $('gFind').onclick = () => goal('find')
 $('gExplore').onclick = () => { api('/api/team/command', 'POST', { target: 'survivors', line: 'explore ' + ($('goalCount').value || 5) }).then(r => r.lines.forEach(l => out(l))).catch(e => out('❌ ' + e.message, 'error')) }
 $('gCancel').onclick = () => api('/api/team/command', 'POST', { target: 'survivors', line: 'cancelgoals' }).then(r => r.lines.forEach(l => out(l))).catch(e => out('❌ ' + e.message, 'error'))
 
-function buildReq (dry) { const params = {}; if ($('bpStyle').value) params.style = $('bpStyle').value; if ($('bpSeed').value.trim()) params.seed = $('bpSeed').value.trim(); if ($('bpSize').value.trim()) params.size = $('bpSize').value.trim(); if ($('bpGather').checked) params.gather = '1'; return { type: $('bpType').value, params, dry, flatten: $('bpFlat').checked } }
+function buildReq (dry) { const params = {}; if ($('bpStyle').value) params.style = $('bpStyle').value; if ($('bpSeed').value.trim()) params.seed = $('bpSeed').value.trim(); if ($('bpSize').value.trim()) params.size = $('bpSize').value.trim(); if ($('bpGather').checked) params.gather = '1'; if (!$('bpWater').checked) params.water = '0'; if ($('bpRing').value.trim() !== '') params.ring = $('bpRing').value.trim(); return { type: $('bpType').value, params, dry, flatten: $('bpFlat').checked } }
 $('dry').onclick = async () => { try { const r = await api('/api/build', 'POST', buildReq(true)); const s = r.summary; out('پیش‌نمایش: ' + (s.style ? 'سبک ' + s.style + ' seed ' + s.seed + ' | ' : '') + s.blocks + ' بلاک، ابعاد ' + s.size.x + '×' + s.size.y + '×' + s.size.z) } catch (e) { fail(e) } }
 $('go').onclick = async () => { try { out('در حال آماده‌سازی ساخت (نقشه‌برداری...)'); const r = await api('/api/build', 'POST', buildReq(false)); out('🚀 شروع شد' + (r.near ? ' — جلوی ' + r.near : '') + ' | ' + r.team.join(', ')) } catch (e) { fail(e) } }
+$('skip').onclick = () => api('/api/build/skip', 'POST', {}).then(r => out(r.skipped ? '⏭ مرحله‌ی جاری رد شد' : 'مرحله‌ای برای رد کردن نیست')).catch(fail)
 $('stop').onclick = () => api('/api/build/stop', 'POST', {}).then(() => out('🛑 ساخت متوقف شد')).catch(fail)
 api('/api/blueprints').then(b => { for (const [k, v] of Object.entries(b)) { const o = document.createElement('option'); o.value = k; o.textContent = k + ' — ' + v.desc.slice(0, 40); $('bpType').appendChild(o) } }).catch(() => {})
 

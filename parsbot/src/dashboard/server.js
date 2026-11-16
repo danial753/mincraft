@@ -88,6 +88,7 @@ module.exports = function startDashboard (fleet, config, hooks = {}) {
     const r = await fleet.project({ type: String(type), opts: params, team: team.length ? team : fleet.online(), at: at && Number.isFinite(at.x) && Number.isFinite(at.z) ? at : null, flatten, force, dry: !!dry })
     return { summary: { name: r.bp.name, blocks: r.info.blocks, size: r.info.size, counts: r.info.counts, seed: r.info.seed, style: r.info.style, flatten: r.info.flatten }, origin: r.origin, near: r.info.near === 'ربات' ? null : r.info.near, team: team.map(m => m.id) }
   }))
+  app.post('/api/build/skip', safe(() => ({ skipped: fleet.skipStage() })))
   app.post('/api/build/stop', safe(() => ({ stopped: fleet.stopBuild() })))
   app.post('/api/bots/:id/role', safe((req) => ({ role: fleet.setRole(req.params.id, String((req.body || {}).role)) })))
   // تنظیمات مدیر و سرعت ساخت

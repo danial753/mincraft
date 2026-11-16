@@ -73,7 +73,8 @@ function inject (bot) {
       // the same ordered connection is proof the rejection window has passed.
       return new Promise((resolve, reject) => {
         function updateSlot (oldItem, newItem) {
-          if (newItem.itemId !== item.itemId) {
+          // parsbot patch: سرور ممکن است اسلات را خالی/عوض کند؛ newItem می‌تواند null باشد
+          if ((newItem && newItem.itemId) !== item.itemId) {
             creativeSlotsUpdates[slot] = false
             reject(Error('Server rejected'))
           }
@@ -88,10 +89,18 @@ function inject (bot) {
     }
 
     try {
+      // parsbot patch: زمان انتظار برای آک کوتاه‌تر (400ms پیش‌فرض پارامتری نیست؛ 5s برای هر بلاک خیلی زیاد بود)
       await onceWithCleanup(bot.inventory, `updateSlot:${slot}`, {
-        timeout: 5000,
+        timeout: Math.min(5000, Number.isFinite(waitTimeout) ? Math.max(200, waitTimeout * 2) : 1000),
         checkCondition: (oldItem, newItem) => item === null ? newItem === null : newItem?.name === item.name && newItem?.count === item.count && newItem?.metadata === item.metadata
       })
+    } catch (err) {
+      // parsbot patch: اگر سرور به set_creative_slot آک ندهد (throttle/لگ/نسخهٔ ناسازگار) پس از
+      // ۵ ثانیه «Event updateSlot:NN did not fire» می‌داد و کل چیدن بلاک fail می‌شد؛ در حالی
+      // که خودمان مدل محلی را با _setSlot همگام کرده بودیم. حالا به‌جای شکست، به همان
+      // مدل محلی تکیه می‌کنیم (اگر سرور رد کرده باشد، پکت set_slot بعدی تصحیحش می‌کند).
+      if (!/did not fire within timeout/i.test(err.message || '')) throw err
+      bot._setSlot(slot, item)
     } finally {
       creativeSlotsUpdates[slot] = false
     }

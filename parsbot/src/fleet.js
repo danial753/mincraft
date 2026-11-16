@@ -196,6 +196,7 @@ class Fleet extends EventEmitter {
         for (const m of team) m.log('info', `🏗 مرحله ${i + 1}/${pl.stages.length}: ${st.job.stage} (${st.job.total} بلاک)`)
         if (st.job.total) await this._runJob(st.job, team, pl.cruiseY, pl.auto)
       }
+      if (pl.post && !pl.cancelled) { try { await pl.post() } catch (e) { if (team[0]) team[0].log('warn', 'آب فواره: ' + e.message) } }
     } finally {
       pl.finished = true; pl.finishedAt = Date.now()
       const s = this._buildStatus()
@@ -271,8 +272,9 @@ class Fleet extends EventEmitter {
     const info = { blocks: bp.blocks.length, size: bp.size, seed: bp.seed, style: bp.style, counts: bp.counts, near, corner: o }
     if (dry) return { bp, info }
     const stages = []; let G; let cruiseY = null
+    let fastOpBots = []; let fastRunParallel = async () => {}
     if (flatten) {
-      const ring = Math.max(0, Math.min(12, opts.ring !== undefined ? parseInt(opts.ring) || 0 : 6))
+      const ring = Math.max(0, Math.min(12, opts.ring !== undefined ? parseInt(opts.ring) || 0 : 4))
       const rect = { x0: core.x0 - ring, z0: core.z0 - ring, x1: core.x1 + ring, z1: core.z1 + ring }
       lead.log('info', `🗺 نقشه‌برداری زمین (${rect.x1 - rect.x0 + 1}×${rect.z1 - rect.z0 + 1})...`)
       // نقشه‌برداری هم‌زمان: قطعه‌ها بین همه‌ی ربات‌ها تقسیم می‌شود
@@ -285,8 +287,9 @@ class Fleet extends EventEmitter {
       const opBots = []
       if (!opts.slow) for (const m of team) { if (m.bot && m.bot.builder && await m.bot.builder.canCommand().catch(() => false)) opBots.push(m) }
       const fast = opBots.length > 0
+      fastOpBots = opBots
       // صف کارهای /fill بین همه‌ی ربات‌های OP پخش می‌شود (هر ربات حدود ۱ دستور در ثانیه می‌تواند)
-      const runParallel = async (jobs) => { const q = [...jobs]; await Promise.all(opBots.map(async (m) => { while (q.length) { const j = q.shift(); try { await j(m.bot.builder) } catch (e) { m.log('warn', 'fill: ' + e.message) } } })) }
+      const runParallel = fastRunParallel = async (jobs) => { const q = [...jobs]; await Promise.all(opBots.map(async (m) => { while (q.length) { const j = q.shift(); try { await j(m.bot.builder) } catch (e) { m.log('warn', 'fill: ' + e.message) } } })) }
       const plan = planFlatten(cols, core, ring, o.y !== undefined ? o.y - 1 : null, fast)
       if (plan.waterFrac > 0.3 && !force) throw new Error(`بیشتر این زمین آب است (${Math.round(plan.waterFrac * 100)}٪). جای دیگری انتخاب کن (at=x,z) یا force=1 بزن.`)
       if (plan.total > 80000 && !force) throw new Error(`تسطیح این زمین ${plan.total} بلاک کار دارد (خیلی ناهموار). جای دیگری انتخاب کن یا force=1 بزن.`)
@@ -302,6 +305,15 @@ class Fleet extends EventEmitter {
           if (t.minG < G) await B.fillBox(t.x0, t.minG, t.z0, t.x1, G - 1, t.z1, 'dirt')
           await B.fillBox(t.x0, G, t.z0, t.x1, G, t.z1, 'grass_block')
         }))
+        if (plan.ringRects.length) {
+          lead.log('info', `⚡ دامنه‌ی شیب‌دار اطراف با /fill (${plan.ringRects.length} مستطیل)...`)
+          const vol = (r, a, b) => (r.xb - r.xa + 1) * (r.z1 - r.z0 + 1) * (b - a + 1)
+          await runParallel(plan.ringRects.map(r => async (B) => {
+            if (r.airFrom !== null && vol(r, r.airFrom, r.airTo) <= 30000) await B.fillBox(r.xa, r.airFrom, r.z0, r.xb, r.airTo, r.z1, 'air')
+            if (r.dirtFrom !== null && r.dirtFrom <= r.dirtTo) await B.fillBox(r.xa, r.dirtFrom, r.z0, r.xb, r.dirtTo, r.z1, 'dirt')
+            if (r.grass) await B.fillBox(r.xa, r.T, r.z0, r.xb, r.T, r.z1, 'grass_block')
+          }))
+        }
       }
       let pre = bp.pre.map(b => ({ x: b.x + core.x0, y: b.y + G + 1, z: b.z + core.z0, block: b.block }))
       if (fast && pre.length) { // خندق: باکس‌های کندن با /fill
@@ -328,13 +340,41 @@ class Fleet extends EventEmitter {
     }
     const origin = { x: core.x0, y: G + 1, z: core.z0 }
     // آویزها (فانوس آویز، زنجیر) باید بعد از سقف بالایشان و از بالا به پایین گذاشته شوند
-    const late = []; const main = []
-    for (const b of bp.blocks) { const sp = parseSpec(b.block); (sp.kind === 'chain' || (sp.kind === 'lantern' && sp.props.hanging === 'true')) ? late.push(b) : main.push(b) }
+    const late = []; const main = []; const water = []
+    for (const b of bp.blocks) {
+      const sp = parseSpec(b.block)
+      if (sp.name === 'water') water.push(b)
+      else (sp.kind === 'chain' || (sp.kind === 'lantern' && sp.props.hanging === 'true')) ? late.push(b) : main.push(b)
+    }
+    // آب خندق: با OP مستقیم با /fill (بدون سطل)؛ بدون OP در مرحله‌ی آخر (تا اگر سطل جواب نداد جلوی ساخت را نگیرد)
+    let waterStage = water
+    let postWater = []
+    if (flatten && water.length && typeof fastOpBots !== 'undefined' && fastOpBots.length) {
+      const ys = [...new Set(water.filter(b => b.y < 0).map(b => b.y))] // فقط آب خندق (زیر سطح زمین)؛ آب فواره بعد از ساخت حوضچه
+      for (const wy of ys) {
+        const cells = new Set(water.filter(b => b.y === wy).map(b => (b.x + core.x0) + ',' + (b.z + core.z0)))
+        const rows = new Map()
+        for (const k of cells) { const [x, z] = k.split(',').map(Number); if (!rows.has(z)) rows.set(z, []); rows.get(z).push(x) }
+        const rects = []; let open = new Map()
+        for (const z of [...rows.keys()].sort((a, b) => a - b)) {
+          const xs = rows.get(z).sort((a, b) => a - b); const next = new Map(); let st = xs[0]; let pv = xs[0]; const runs = []
+          for (let i = 1; i <= xs.length; i++) { if (i === xs.length || xs[i] !== pv + 1) { runs.push([st, pv]); st = xs[i] } pv = xs[i] }
+          for (const [xa, xb] of runs) { const key = xa + ':' + xb; const r = open.get(key); if (r && r.z1 === z - 1) { r.z1 = z; next.set(key, r) } else { const nr = { xa, xb, z0: z, z1: z }; rects.push(nr); next.set(key, nr) } }
+          open = next
+        }
+        lead.log('info', `💧 آب خندق با /fill (${rects.length} مستطیل)...`)
+        await fastRunParallel(rects.map(r => async (B) => { await B.fillBox(r.xa, G + 1 + wy, r.z0, r.xb, G + 1 + wy, r.z1, 'water') }))
+      }
+      postWater = water.filter(b => b.y >= 0) // آب فواره: بعد از تمام شدن ساخت با /setblock
+      waterStage = []
+    }
     stages.push({ gather: true, job: new BuildJob({ name: bp.name, stage: 'ساخت ' + bp.name, blocks: main, origin, order: 'asc' }) })
     if (late.length) stages.push({ gather: true, job: new BuildJob({ name: bp.name, stage: 'آویزها: فانوس و زنجیر', blocks: late, origin, order: 'desc' }) })
+    if (waterStage.length) stages.push({ job: new BuildJob({ name: bp.name, stage: 'آب خندق (با سطل)', blocks: waterStage, origin, order: 'asc', maxTries: 2 }) })
     for (const m of team) if (m.bot && m.bot.builder) { m.bot.builder.gather.on = false; m.bot.builder.gather.ledger = {} }
     info.gather = gatherMode
-    const pl = { name: bp.name, stages, idx: 0, origin, info, gatherMode, auto: team.length === this.builders().length, cancelled: false, finished: false, startedAt: Date.now(), cruiseY }
+    const postFn = postWater.length ? async () => { const B = fastOpBots[0].bot.builder; for (const w of postWater) await B.cmd(`/setblock ${origin.x + w.x} ${origin.y + w.y} ${origin.z + w.z} water`, 1200).catch(() => {}) } : null
+    const pl = { post: postFn, name: bp.name, stages, idx: 0, origin, info, gatherMode, auto: team.length === this.builders().length, cancelled: false, finished: false, startedAt: Date.now(), cruiseY }
     this.pipeline = pl
     this.job = stages[0].job
     this._runPipeline(pl, team).catch(e => lead.log('error', 'خط لوله‌ی ساخت: ' + e.message))
@@ -350,6 +390,17 @@ class Fleet extends EventEmitter {
     this.pipeline = pl; this.job = job
     this._runPipeline(pl, bots).catch(() => {})
     return job
+  }
+
+  // مرحله‌ی جاری را رد کن و برو مرحله‌ی بعد (مثلاً وقتی تسطیح دامنه خیلی کند است)
+  skipStage () {
+    const pl = this.pipeline
+    if (!pl || pl.finished) return false
+    const st = pl.stages[pl.idx]
+    if (!st || st.job.finished) return false
+    st.job.cancel()
+    for (const m of this.bots.values()) if (m.task && m.task.name === 'build') m.cancelTask()
+    return true
   }
 
   stopBuild () {

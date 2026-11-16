@@ -237,9 +237,9 @@ module.exports = function builder (bot, ctx) {
       await bot.lookAt(r.ref.position.offset(0.5, r.face.y > 0 ? 1 : 0.5, 0.5), true)
       await bot.waitForTicks(2)
       bot.activateItem()
-      await sleep(500)
-      const nowF = bot.blockAt(target)
-      if (!nowF || nowF.name !== spec.name) throw new Error('سطل آب جواب نداد')
+      let nowF = null
+      for (let i = 0; i < 12; i++) { await sleep(250); nowF = bot.blockAt(target); if (nowF && nowF.name === spec.name) break } // سرور کند جواب می‌دهد
+      if (!nowF || nowF.name !== spec.name) throw new Error('سطل آب جواب نداد (برای آب خندق ربات را OP کن یا water=0 بزن)')
       return
     }
     const opts = { swingArm: 'right', half: r.half, forceLook: true }
@@ -279,7 +279,7 @@ module.exports = function builder (bot, ctx) {
         if (ctx.fleet) { ctx.fleet.recordOutcome(true); const d = ctx.fleet.delayMs(); if (d > 0) await sleep(d) }
       } catch (err) {
         if (task.cancelled || job.cancelled) { job.fail(e, 'لغو شد', true); break }
-        job.fail(e, String(err.message).slice(0, 60), !!err.fatal)
+        job.fail(e, String(err.message).slice(0, 160), !!err.fatal)
         if (ctx.fleet) ctx.fleet.recordOutcome(false)
       }
       if (state === 'gathering') ss('placing')

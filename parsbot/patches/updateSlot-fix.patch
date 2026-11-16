@@ -1,0 +1,286 @@
+diff --git a/mineflayer/lib/plugins/creative.js b/mineflayer/lib/plugins/creative.js
+index 55b8403..a799450 100644
+--- a/mineflayer/lib/plugins/creative.js
++++ b/mineflayer/lib/plugins/creative.js
+@@ -73,7 +73,8 @@ function inject (bot) {
+       // the same ordered connection is proof the rejection window has passed.
+       return new Promise((resolve, reject) => {
+         function updateSlot (oldItem, newItem) {
+-          if (newItem.itemId !== item.itemId) {
++          // parsbot patch: سرور ممکن است اسلات را خالی/عوض کند؛ newItem می‌تواند null باشد
++          if ((newItem && newItem.itemId) !== item.itemId) {
+             creativeSlotsUpdates[slot] = false
+             reject(Error('Server rejected'))
+           }
+@@ -88,10 +89,18 @@ function inject (bot) {
+     }
+ 
+     try {
++      // parsbot patch: زمان انتظار برای آک کوتاه‌تر (400ms پیش‌فرض پارامتری نیست؛ 5s برای هر بلاک خیلی زیاد بود)
+       await onceWithCleanup(bot.inventory, `updateSlot:${slot}`, {
+-        timeout: 5000,
++        timeout: Math.min(5000, Number.isFinite(waitTimeout) ? Math.max(200, waitTimeout * 2) : 1000),
+         checkCondition: (oldItem, newItem) => item === null ? newItem === null : newItem?.name === item.name && newItem?.count === item.count && newItem?.metadata === item.metadata
+       })
++    } catch (err) {
++      // parsbot patch: اگر سرور به set_creative_slot آک ندهد (throttle/لگ/نسخهٔ ناسازگار) پس از
++      // ۵ ثانیه «Event updateSlot:NN did not fire» می‌داد و کل چیدن بلاک fail می‌شد؛ در حالی
++      // که خودمان مدل محلی را با _setSlot همگام کرده بودیم. حالا به‌جای شکست، به همان
++      // مدل محلی تکیه می‌کنیم (اگر سرور رد کرده باشد، پکت set_slot بعدی تصحیحش می‌کند).
++      if (!/did not fire within timeout/i.test(err.message || '')) throw err
++      bot._setSlot(slot, item)
+     } finally {
+       creativeSlotsUpdates[slot] = false
+     }
+diff --git a/parsbot/src/build/job.js b/parsbot/src/build/job.js
+index 87fd3fe..3276dd2 100644
+--- a/parsbot/src/build/job.js
++++ b/parsbot/src/build/job.js
+@@ -120,6 +120,27 @@ class BuildJob extends EventEmitter {
+ 
+   cancel () { this.cancelled = true; this._check() }
+ 
++  // دوباره‌کردن بلاک‌های شکست‌خورده: خطاهای موقت (لگ سرور، تایم‌اوت آک، جهت اشتباه)
++  // باعث «حفره» در سازه می‌شدند. در پایان هر مرحله یک پاس اضافه اجرا می‌شود.
++  // extra: چند بار حداکثر یک بلاک را می‌توان دوباره امتحان کرد (جدا از ۶ تلاش اولیه)
++  retryFailed (extra = 2) {
++    let n = 0
++    this.retryPasses = (this.retryPasses || 0) + 1
++    if (this.retryPasses > extra) return 0 // فقط extra پاس در کل (نه extra پاس برای هر بلاک)
++    for (const e of this.all) {
++      if (e.state !== 'failed') continue
++      e.retries = (e.retries || 0) + 1
++      e.tries = 0
++      e.cool = 0
++      e.owner = null
++      e.error = null
++      this._set(e, 'todo')
++      n++
++    }
++    if (n) { this.finishedAt = null; this._check() }
++    return n
++  }
++
+   _check () {
+     if (this.finished && !this.finishedAt) { this.finishedAt = Date.now(); this.emit('finished', this.summary()) }
+   }
+diff --git a/parsbot/src/fleet.js b/parsbot/src/fleet.js
+index fe1dcc7..46cc22a 100644
+--- a/parsbot/src/fleet.js
++++ b/parsbot/src/fleet.js
+@@ -148,6 +148,21 @@ class Fleet extends EventEmitter {
+ 
+   async _runJob (job, team, cruiseY, auto = false) {
+     job.cruiseY = cruiseY
++    // پاس دوباره برای بلاک‌های ناموفق: خطاهای موقت (تایم‌اوت آک کوله/لگ سرور/جهت اشتباه)
++    // نباید حفره در سازه باقی بگذارند. حداکثر ۲ پاس اضافه برای هر مرحله.
++    for (let pass = 0; pass <= 2; pass++) {
++      await this._runJobOnce(job, team, auto)
++      if (job.cancelled) return
++      if (pass >= 2) break
++      const requeued = job.retryFailed(1)
++      if (!requeued) break
++      const lead = team.find(m => m.bot) || team[0]
++      if (lead) lead.log('info', `♻️ پاس ${pass + 1}: ${requeued} بلاک ناموفق دوباره ساخته می‌شود`)
++      await new Promise(resolve => setTimeout(resolve, 1500))
++    }
++  }
++
++  async _runJobOnce (job, team, auto = false) {
+     const working = new Set()
+     const start = (m) => {
+       if (working.has(m.id) || !m.bot || !m.bot.builder || !m.bot.entity) return
+diff --git a/parsbot/src/plugins/builder.js b/parsbot/src/plugins/builder.js
+index 6a0f2e0..cbb0dcc 100644
+--- a/parsbot/src/plugins/builder.js
++++ b/parsbot/src/plugins/builder.js
+@@ -25,7 +25,6 @@ function parseArgs (args) {
+ 
+ module.exports = function builder (bot, ctx) {
+   let Item = null
+-  let slotRR = 0
+   bot.once('spawn', () => {
+     try { Item = require(require.resolve('prismarine-item', { paths: [path.dirname(require.resolve('mineflayer'))] }))(bot.registry) } catch (e) { ctx.log('warn', 'prismarine-item بارگذاری نشد؛ حالت creative کار نمی‌کند: ' + e.message) }
+   })
+@@ -101,25 +100,115 @@ module.exports = function builder (bot, ctx) {
+     ctx.log('info', `✅ ${got} تا ${name} جمع شد؛ برمی‌گردم به ساخت.`)
+   }
+ 
++  // ---- مصالح در حالت creative ----
++  // why this is rewritten:
++  //  * v5.1 put the block into slot 38+ (main inventory) and then tried to *move* it into the
++  //    hotbar with `bot.equip`. That move is a window_click round-trip: on servers that
++  //    throttle / drop inventory clicks (and any server while it is lagging) it dies with
++  //    "Event updateSlot:38 did not fire within timeout of 5000ms".
++  //    The same failure repeats for every single block of that type, which is exactly what
++  //    the build status showed ("Event updateSlot:38..40 did not fire" with 257 failures).
++  //  * the safe path is: put the block **straight into a hotbar slot** (36..44) and then only
++  //    select that slot. Selecting a hotbar slot is a pure client->server packet
++  //    (held_item_slot); no acknowledgement is required, so nothing can time out.
++  //    `bot.setQuickBarSlot` also updates `bot.heldItem` locally, which is what
++  //    `_genericPlace` needs.
++  // قرار دادن یک بلاک در یک اسلات، بدون انتظار برای «آک» سرور.
++  // چرا: در mineflayer، `bot.creative.setInventorySlot` برای نسخه‌های قدیمی‌تر از 1.21.3
++  // منتظر پکت `set_slot` سرور می‌ماند و اگر سرور جواب ندهد پس از ۵ ثانیه با
++  // «Event updateSlot:NN did not fire within timeout of 5000ms» می‌میرد — همان خطایی که
++  // در وضعیت ساخت دیده می‌شد (اسلات‌های ۳۸/۳۹/۴۰). ولی برای گذاشتن بلاک، ما به آک نیازی
++  // نداریم: پکت را می‌فرستیم و مدل محلی را خودمان همگام می‌کنیم (دقیقاً کاری که خودِ
++  // creative.js در حالت noAck انجام می‌دهد). اگر سرور جواب رد بدهد، پکت set_slot بعدی
++  // مدل را تصحیح می‌کند و ما با خواندن کوله متوجه می‌شویم.
++  async function fillSlot (slot, def) {
++    const item = new Item(def.id, 64)
++    if (typeof bot._client?.write === 'function' && typeof bot._setSlot === 'function') {
++      try {
++        bot._client.write('set_creative_slot', { slot, item: Item.toNotch(item) })
++        bot._setSlot(slot, item)
++        return true
++      } catch (e) { dbg('fillSlot direct failed:', e.message) }
++    }
++    await bot.creative.setInventorySlot(slot, item) // مسیر رسمی (ممکن است ۵ ثانیه منتظر آک بماند)
++    return true
++  }
++
++  const hotbar = new Map() // block name -> hotbar slot (36..44)
++  let hotbarNext = 0
++
++  function hotbarSlotFor (name) {
++    if (hotbar.has(name)) return hotbar.get(name)
++    for (let s = 36; s <= 44; s++) { // already there? reuse (also covers servers that keep slots)
++      const it = bot.inventory.slots[s]
++      if (it && it.name === name) { hotbar.set(name, s); return s }
++    }
++    let slot = 36 + (hotbarNext++ % 9)
++    const cur = bot.inventory.slots[slot]
++    if (cur && cur.name !== name) {
++      const free = [36, 37, 38, 39, 40, 41, 42, 43, 44].find(s => !bot.inventory.slots[s])
++      if (free !== undefined) slot = free
++      else for (const [other, s] of hotbar) if (s === slot) { hotbar.delete(other); break }
++    }
++    hotbar.set(name, slot)
++    return slot
++  }
++
++  function selectHotbar (slot) {
++    if (slot < 36 || slot > 44) return false
++    try { bot.setQuickBarSlot(slot - 36); return true } catch (e) { dbg('setQuickBarSlot:', e.message); return false }
++  }
++
++  // بلاک را در هات‌بار تضمین کن و انتخابش کن — بدون هیچ انتظار آکی
++  async function ensureHeld (name) {
++    if (!Item) throw fatal('Item در دسترس نیست (prismarine-item بارگذاری نشد)')
++    const def = bot.registry.itemsByName[name]
++    if (!def) throw fatal('بلاک/آیتم ناشناخته در این نسخه: ' + name)
++    let slot = hotbarSlotFor(name)
++    let cur = bot.inventory.slots[slot]
++    if (!(cur && cur.name === name && cur.count > 0)) {
++      try {
++        await fillSlot(slot, def)
++      } catch (e) {
++        // بعضی سرورها آک نمی‌دهند ولی اسلات واقعاً پر شده — کوله را دوباره بخوان
++        await sleep(250)
++        cur = bot.inventory.slots[slot]
++        if (!(cur && cur.name === name)) {
++          await sleep(400)
++          cur = bot.inventory.slots[slot]
++          if (!(cur && cur.name === name)) throw e
++        }
++      }
++    }
++    if (!selectHotbar(slot)) {
++      // آیتم در کوله افتاده (اسلات 9..35): فقط در این حالت equip لازم است
++      const it = bot.inventory.slots[slot] || bot.inventory.items().find(i => i.name === name)
++      if (!it) throw fatal('مصالح ساخته نشد: ' + name)
++      await bot.equip(it, 'hand')
++      return it
++    }
++    const it = bot.inventory.slots[slot]
++    if (!it || it.name !== name) throw fatal('مصالح ساخته نشد: ' + name)
++    return it
++  }
++
+   async function ensureItem (name) {
+-    let it = bot.inventory.items().find(i => i.name === name)
+     if (gather.on) {
++      let it = bot.inventory.items().find(i => i.name === name)
+       if (gather.ledger[name] === undefined) gather.ledger[name] = realCount(name)
+       if (gather.ledger[name] <= 0 || !it) await replenish(name)
+       it = bot.inventory.items().find(i => i.name === name)
+-    } else if (!it && isCreative()) {
+-      const def = bot.registry.itemsByName[name]
+-      if (!def) throw fatal('بلاک/آیتم ناشناخته در این نسخه: ' + name)
+-      if (!Item) throw fatal('Item در دسترس نیست')
+-      const slot = 36 + (slotRR++ % 9)
+-      try { await bot.creative.setInventorySlot(slot, new Item(def.id, 64)) } catch (e) {
+-        await sleep(300) // روی بعضی نسخه‌ها تأیید نمی‌آید ولی آیتم گذاشته شده؛ کوله را بررسی کن
+-        if (!(bot.inventory.slots[slot] && bot.inventory.slots[slot].name === name)) { await sleep(700); if (!(bot.inventory.slots[slot] && bot.inventory.slots[slot].name === name)) throw e }
+-      }
+-      it = bot.inventory.slots[slot] || bot.inventory.items().find(i => i.name === name)
++      if (!it) throw fatal('مصالح کافی نیست: ' + name)
++      if (!bot.heldItem || bot.heldItem.name !== name) await bot.equip(it, 'hand')
++      return it
+     }
+-    if (!it) throw fatal('مصالح کافی نیست: ' + name)
+-    if (!bot.heldItem || bot.heldItem.name !== name) await bot.equip(it, 'hand')
++    if (!isCreative()) {
++      const it = bot.inventory.items().find(i => i.name === name)
++      if (!it) throw fatal('مصالح کافی نیست: ' + name)
++      if (!bot.heldItem || bot.heldItem.name !== name) await bot.equip(it, 'hand')
++      return it
++    }
++    return ensureHeld(name)
+   }
+ 
+   let curJob = null
+@@ -257,6 +346,7 @@ module.exports = function builder (bot, ctx) {
+   function setState (v) { state = v; stateSince = Date.now(); if (bot.builder) { bot.builder.state = v; bot.builder.stateSince = stateSince } }
+ 
+   let workerSeq = 0
++  let consecLibErrors = 0
+   async function work (job, task) {
+     const id = ctx.manager.id
+     const myWorker = ++workerSeq
+@@ -279,8 +369,16 @@ module.exports = function builder (bot, ctx) {
+         if (ctx.fleet) { ctx.fleet.recordOutcome(true); const d = ctx.fleet.delayMs(); if (d > 0) await sleep(d) }
+       } catch (err) {
+         if (task.cancelled || job.cancelled) { job.fail(e, 'لغو شد', true); break }
+-        job.fail(e, String(err.message).slice(0, 60), !!err.fatal)
++        const msg = String(err.message || err)
++        const libErr = /did not fire within timeout|updateSlot:/i.test(msg)
++        // اگر خطای «کوله/اسلات» پشت‌سرهم تکرار شود یعنی مشکل ساختاری است (نه یک بلاک خاص):
++        // بلاک را failed کن تا ساخت جلو برود و ۲۵۰ بار ۵ ثانیه تلف نشود؛ و یک بار واضح بگو.
++        job.fail(e, msg.slice(0, 60), !!err.fatal || (libErr && consecLibErrors >= 4))
+         if (ctx.fleet) ctx.fleet.recordOutcome(false)
++        if (libErr) {
++          if (consecLibErrors === 0) ctx.log('error', '⛔ خطای کتابخانه در اسلات/کوله: ' + msg + ' — سرور به پکت‌های inventory پاسخ نمی‌دهد یا نسخه/پروتکل ناسازگار است. بررسی: all doctor')
++          consecLibErrors++
++        } else consecLibErrors = 0
+       }
+       if (state === 'gathering') ss('placing')
+     }
+@@ -436,15 +534,23 @@ module.exports = function builder (bot, ctx) {
+       if (!Item) bad('prismarine-item بارگذاری نشد (حالت creative کار نمی‌کند)')
+       if (gm === 'creative' && Item) {
+         try {
+-          await bot.creative.setInventorySlot(36, new Item(bot.registry.itemsByName.stone.id, 64)); await sleep(500)
++          // همان مسیری که ساخت واقعاً استفاده می‌کند: گذاشتن در اسلات هات‌بار + انتخاب آن
++          const t0 = Date.now()
++          const core = bot.supportFeature('noAckOnCreateSetSlotPacket') ? 'noAck' : 'needsAck'
++          await fillSlot(36, bot.registry.itemsByName.stone); await sleep(120)
++          selectHotbar(36)
+           const got = bot.inventory.slots[36]
+-          got && got.name === 'stone' ? ok('گرفتن بلاک از creative کار می‌کند') : bad('creative بلاک را در کوله نگذاشت (مشکل نسخه یا پروتکل)')
++          const held = !!(bot.heldItem && bot.heldItem.name === 'stone')
++          got && got.name === 'stone' ? ok(`گرفتن بلاک از creative کار می‌کند (${Date.now() - t0}ms، مسیر ${core})`) : bad('creative بلاک را در کوله نگذاشت (مشکل نسخه یا پروتکل)')
++          if (!held) {
++            try { await bot.equip(bot.inventory.slots[36], 'hand'); ok('انتخاب هات‌بار همگام نشد ولی equip (مسیر پشتیبان) کار کرد') } catch (e) { bad('انتخاب هات‌بار و equip هر دو کار نکردند — ساخت با خطای updateSlot متوقف می‌شود: ' + e.message) }
++          }
+           // آزمایش چیدن: یک بلاک روی زمین جلوی ربات می‌گذارد و برمی‌دارد
+           let done = false
+           for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2], [3, 1], [1, 3]]) {
+             const ground = bot.blockAt(feet.offset(dx, -1, dz)); const air = bot.blockAt(feet.offset(dx, 0, dz))
+             if (!ground || ground.boundingBox !== 'block' || !air || air.name !== 'air') continue
+-            await bot.equip(bot.inventory.slots[36], 'hand')
++            selectHotbar(36)
+             try {
+               await withTimeout(bot._placeBlockWithOptions(ground, new Vec3(0, 1, 0), { swingArm: 'right', forceLook: true }), 6000, 'تأیید چیدن نیامد')
+               const placed = bot.blockAt(feet.offset(dx, 0, dz))

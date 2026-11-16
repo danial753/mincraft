@@ -3,11 +3,12 @@ const EventEmitter = require('events')
 const { parse } = require('./spec')
 
 class BuildJob extends EventEmitter {
-  constructor ({ name, blocks, origin, order = 'asc', stage = null }) {
+  constructor ({ name, blocks, origin, order = 'asc', stage = null, maxTries = 6 }) {
     super()
     this.name = name
     this.stage = stage
     this.order = order
+    this.maxTries = maxTries
     this.origin = origin
     this.cancelled = false
     this.startedAt = Date.now()
@@ -21,6 +22,10 @@ class BuildJob extends EventEmitter {
     }
     this.ys = [...this.layers.keys()].sort((a, b) => order === 'desc' ? b - a : a - b)
     // حالت ستونی: ربات‌ها ستون‌به‌ستون (بالا به پایین یا پایین به بالا) جارو می‌کنند، نه لایه‌به‌لایه؛ مسیر پرواز کوتاه‌تر
+    // «ته‌مانده»: بلاک‌هایی که ۳ بار شکست خورده‌اند به انتهای کار می‌روند تا جلوی لایه‌های دیگر را نگیرند
+    this.TAIL = 1e9
+    this.layers.set(this.TAIL, [])
+    this.ys.push(this.TAIL)
     this.colMode = order === 'cols-desc' || order === 'cols-asc'
     this.all = []
     for (const l of this.layers.values()) for (const e of l) this.all.push(e)
@@ -98,9 +103,17 @@ class BuildJob extends EventEmitter {
     e.tries++
     e.error = message
     e.owner = null
-    this.failures[message] = (this.failures[message] || 0) + 1
-    if (fatal || e.tries >= 6) this._set(e, 'failed')
-    else { e.cool = Date.now() + 1200 * e.tries; this._set(e, 'todo') }
+    const reason = String(message).replace(/\(-?\d+, -?\d+, -?\d+\)/g, '@').slice(0, 110) // مختصات را حذف کن تا دلیل‌های هم‌نوع یکی شمرده شوند
+    this.failures[reason] = (this.failures[reason] || 0) + 1
+    if (fatal || e.tries >= this.maxTries) this._set(e, 'failed')
+    else {
+      e.cool = Date.now() + 1200 * e.tries
+      this._set(e, 'todo')
+      if (e.tries >= 3 && !this.colMode && e.inTail !== true) { // به انتها منتقل کن
+        for (const l of this.layers.values()) { const i = l.indexOf(e); if (i >= 0) { l.splice(i, 1); break } }
+        this.layers.get(this.TAIL).push(e); e.inTail = true
+      }
+    }
     this._check()
   }
 
@@ -130,7 +143,7 @@ class BuildJob extends EventEmitter {
     return {
       name: this.name, stage: this.stage, origin: this.origin, total: this.total, todo, claimed, done, failed,
       percent: this.total ? Math.round((done + failed) / this.total * 1000) / 10 : 100,
-      layer: this.colMode ? null : this.currentLayer(), seconds: Math.round((end - this.startedAt) / 1000),
+      layer: this.colMode ? null : (this.currentLayer() === this.TAIL ? 'ته‌مانده' : this.currentLayer()), seconds: Math.round((end - this.startedAt) / 1000),
       cancelled: this.cancelled, finished: !!this.finishedAt,
       topFailures: Object.entries(this.failures).sort((a, b) => b[1] - a[1]).slice(0, 3)
     }

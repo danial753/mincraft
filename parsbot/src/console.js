@@ -10,6 +10,7 @@ const HELP = [
   'build castle [size=57] [seed=7] [style=royal|gothic|azure|sun|forest] [at=x,z] [flatten=0] — ساخت گروهی (همه‌ی سازنده‌ها)',
   'build castle size=49 gather=1 — ربات‌ها مصالح را خودشان جمع می‌کنند (کبل‌استون/چوب...)؛ خیلی کندتر ولی واقعی',
   'get <چیز> [تعداد] — ربات بقا می‌رود و می‌آورد | find <چیز> — می‌گردد و مختصات می‌دهد | explore [مرحله]',
+  'skipstage — رد کردن مرحله‌ی جاری ساخت (مثلاً تسطیح کند دامنه)',
   'speed 1..5|auto — سرعت ساخت | stall <ثانیه>|on|off — مدیر (راه‌اندازی مجدد ربات‌های گیرکرده)',
   'bots | roles | goals | buildinfo | buildstop | stop | help'
 ]
@@ -24,6 +25,7 @@ async function runLine (fleet, line) {
     for (const m of fleet.bots.values()) { const s = m.status(); out.push(`${m.id === (fleet.leader() && fleet.leader().id) ? '★' : ' '} ${m.id} | ${m.connection} | نقش: ${m.role} | کار: ${m.mode.name}${m.mode.detail ? ' (' + m.mode.detail + ')' : ''}${s.gameMode ? ' | ' + s.gameMode : ''}${s.position ? ' | ' + s.position.x + ',' + s.position.y + ',' + s.position.z : ''}`) }
     return out.length ? out : ['هیچ رباتی نیست.']
   }
+  if (first === 'skipstage' || first === 'ردکردن') return [fleet.skipStage() ? '⏭ مرحله‌ی جاری رد شد؛ مرحله‌ی بعد شروع می‌شود.' : 'مرحله‌ای برای رد کردن نیست.']
   if (first === 'speed' || first === 'سرعت') {
     const v = (toks[1] || '').toLowerCase()
     if (!v) return [`سرعت فعلی: ${fleet.settings.auto ? 'خودکار' : fleet.settings.speed} (تأخیر ${fleet.delayMs()}ms). استفاده: speed 1..5 | speed auto`]

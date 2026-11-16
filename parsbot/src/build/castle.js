@@ -43,7 +43,7 @@ function grandCastle (o = {}) {
     if (ex > 0 && ez > 0 && (ex * ex + ez * ez) > 6.6 * 6.6) continue // گوشه‌ی گرد بیرونی
     const bridge = z < 0 && x >= c - 2 && x <= c + 2
     for (let y = -3; y <= -1; y++) g.dig(x, y, z)
-    if (!bridge) g.set(x, -3, z, 'water')
+    if (!bridge && o.water !== '0' && o.water !== 0) g.set(x, -3, z, 'water')
   }
   // پل متحرک
   for (let z = -6; z <= -3; z++) for (let x = c - 2; x <= c + 2; x++) g.set(x, -1, z, (x === c - 2 || x === c + 2) ? p.log && axis(p.log, 'z') : p.wood)
